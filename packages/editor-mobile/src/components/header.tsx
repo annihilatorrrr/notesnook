@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,37 +17,69 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+import { ControlledMenu, MenuItem as MenuItemInner } from "@szhsin/react-menu";
 import ArrowBackIcon from "mdi-react/ArrowBackIcon";
-import CloudUploadOutlineIcon from "mdi-react/CloudUploadOutlineIcon";
-import CrownIcon from "mdi-react/CrownIcon";
-import DotsHorizontalIcon from "mdi-react/DotsHorizontalIcon";
+import ArrowForwardIcon from "mdi-react/ArrowForwardIcon";
 import ArrowULeftTopIcon from "mdi-react/ArrowULeftTopIcon";
 import ArrowURightTopIcon from "mdi-react/ArrowURightTopIcon";
+import DotsHorizontalIcon from "mdi-react/DotsHorizontalIcon";
+import DotsVerticalIcon from "mdi-react/DotsVerticalIcon";
 import FullscreenIcon from "mdi-react/FullscreenIcon";
 import MagnifyIcon from "mdi-react/MagnifyIcon";
-import React from "react";
+import PlusIcon from "mdi-react/PlusIcon";
+
+import PencilLockIcon from "mdi-react/PencilLockIcon";
+import TableOfContentsIcon from "mdi-react/TableOfContentsIcon";
+import React, { useRef, useState } from "react";
 import { useSafeArea } from "../hooks/useSafeArea";
-import { EventTypes, Settings } from "../utils";
+import { useTabContext, useTabStore } from "../hooks/useTabStore";
+import { Settings } from "../utils";
+import { EditorEvents } from "../utils/editor-events";
 import styles from "./styles.module.css";
+import { strings } from "@notesnook/intl";
+
+const menuClassName = ({ state }: any) =>
+  state === "opening"
+    ? styles.menuOpening
+    : state === "closing"
+    ? styles.menuClosing
+    : styles.menu;
+
+const menuItemClassName = ({ hover, disabled }: any) =>
+  disabled
+    ? styles.menuItemDisabled
+    : hover
+    ? styles.menuItemHover
+    : styles.menuItem;
+
+const MenuItem = (props: any) => (
+  <MenuItemInner {...props} className={menuItemClassName} />
+);
 
 const Button = ({
   onPress,
   children,
   style,
-  preventDefault = true
+  preventDefault = true,
+  fwdRef,
+  onClick
 }: {
-  onPress: () => void;
+  onPress?: () => void;
+  onClick?: (event: any) => void;
   children: React.ReactNode;
   style: React.CSSProperties;
   preventDefault?: boolean;
+  fwdRef?: any;
 }) => {
   return (
     <button
+      ref={fwdRef}
       className={styles.btn_header}
       style={style}
       onMouseDown={(e) => {
         if (preventDefault) e.preventDefault();
-        onPress();
+        onPress?.();
+        onClick?.(e);
       }}
     >
       {children}
@@ -55,7 +87,7 @@ const Button = ({
   );
 };
 
-export default function Header({
+function Header({
   noHeader,
   settings,
   hasUndo,
@@ -65,19 +97,29 @@ export default function Header({
   settings: Settings;
   hasUndo: boolean;
   hasRedo: boolean;
-}) {
+}): JSX.Element {
+  const tab = useTabContext();
+  const editor = editors[tab.id];
   const insets = useSafeArea();
+  const openedTabsCount = useTabStore((state) => state.tabs.length);
+  const [isOpen, setOpen] = useState(false);
+  const btnRef = useRef(null);
+  const [canGoBack, canGoForward] = useTabStore((state) => [
+    state.canGoBack,
+    state.canGoForward
+  ]);
+
   return (
     <div
       style={{
         display: "flex",
         alignItems: "center",
         height: noHeader ? `${insets.top}px` : `${50 + insets.top}px`,
-        backgroundColor: "var(--nn_bg)",
+        backgroundColor: "var(--nn_primary_background)",
         position: "sticky",
-        width: "100vw"
+        width: "100vw",
+        zIndex: 999
       }}
-   
     >
       {noHeader ? null : (
         <div
@@ -90,20 +132,20 @@ export default function Header({
             height: 50,
             alignItems: "center"
           }}
-          id='header'
+          id="header"
         >
           {settings.deviceMode !== "mobile" && !settings.fullscreen ? (
             <div />
           ) : (
             <Button
               onPress={() => {
-                post(EventTypes.back);
+                post(EditorEvents.back, undefined, tab.id, tab.session?.noteId);
               }}
               preventDefault={false}
               style={{
                 borderWidth: 0,
                 borderRadius: 100,
-                color: "var(--nn_icon)",
+                color: "var(--nn_primary_icon)",
                 marginLeft: 6,
                 width: 40,
                 height: 40,
@@ -115,11 +157,11 @@ export default function Header({
               }}
             >
               <ArrowBackIcon
-                size={27}
+                size={28 * settings.fontScale}
                 style={{
                   position: "absolute"
                 }}
-                color="var(--nn_pri)"
+                color="var(--nn_primary_icon)"
               />
             </Button>
           )}
@@ -131,6 +173,73 @@ export default function Header({
               flexDirection: "row"
             }}
           >
+            {settings.deviceMode !== "mobile" && !settings.fullscreen ? (
+              <Button
+                onPress={() => {
+                  post(
+                    EditorEvents.fullscreen,
+                    undefined,
+                    tab.id,
+                    tab.session?.noteId
+                  );
+                }}
+                preventDefault={false}
+                style={{
+                  borderWidth: 0,
+                  borderRadius: 100,
+                  color: "var(--nn_primary_icon)",
+                  marginRight: 10,
+                  width: 39,
+                  height: 39,
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  position: "relative"
+                }}
+              >
+                <FullscreenIcon
+                  size={25 * settings.fontScale}
+                  style={{
+                    position: "absolute"
+                  }}
+                  color="var(--nn_primary_icon)"
+                />
+              </Button>
+            ) : null}
+
+            {tab.session?.readonly ? (
+              <Button
+                onPress={() => {
+                  post(
+                    "editor-events:disable-readonly-mode",
+                    tab.session?.noteId
+                  );
+                }}
+                fwdRef={btnRef}
+                preventDefault={false}
+                style={{
+                  borderWidth: 0,
+                  borderRadius: 100,
+                  color: "var(--nn_primary_accent)",
+                  marginRight: 12,
+                  width: 39,
+                  height: 39,
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  position: "relative"
+                }}
+              >
+                <PencilLockIcon
+                  size={25 * settings.fontScale}
+                  style={{
+                    position: "absolute"
+                  }}
+                  color="var(--nn_primary_accent)"
+                />
+              </Button>
+            ) : null}
+
             <Button
               onPress={() => {
                 editor?.commands.undo();
@@ -138,7 +247,7 @@ export default function Header({
               style={{
                 borderWidth: 0,
                 borderRadius: 100,
-                color: "var(--nn_icon)",
+                color: "var(--nn_primary_icon)",
                 marginRight: 10,
                 width: 39,
                 height: 39,
@@ -149,8 +258,12 @@ export default function Header({
               }}
             >
               <ArrowULeftTopIcon
-                color={!hasUndo ? "var(--nn_nav)" : "var(--nn_pri)"}
-                size={25}
+                color={
+                  !hasUndo
+                    ? "var(--nn_secondary_border)"
+                    : "var(--nn_primary_icon)"
+                }
+                size={25 * settings.fontScale}
                 style={{
                   position: "absolute"
                 }}
@@ -164,7 +277,7 @@ export default function Header({
               style={{
                 borderWidth: 0,
                 borderRadius: 100,
-                color: "var(--nn_icon)",
+                color: "var(--nn_primary_icon)",
                 marginRight: 10,
                 width: 39,
                 height: 39,
@@ -175,132 +288,32 @@ export default function Header({
               }}
             >
               <ArrowURightTopIcon
-                color={!hasRedo ? "var(--nn_nav)" : "var(--nn_pri)"}
-                size={25}
+                color={
+                  !hasRedo
+                    ? "var(--nn_secondary_border)"
+                    : "var(--nn_primary_icon)"
+                }
+                size={25 * settings.fontScale}
                 style={{
                   position: "absolute"
                 }}
               />
             </Button>
-            {!settings.premium && (
-              <Button
-                onPress={() => {
-                  post(EventTypes.pro);
-                }}
-                preventDefault={false}
-                style={{
-                  borderWidth: 0,
-                  borderRadius: 100,
-                  color: "var(--nn_icon)",
-                  marginRight: 10,
-                  width: 39,
-                  height: 39,
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  position: "relative"
-                }}
-              >
-                <CrownIcon
-                  size={25}
-                  style={{
-                    position: "absolute"
-                  }}
-                  color="orange"
-                />
-              </Button>
-            )}
 
             <Button
               onPress={() => {
-                editor?.commands.startSearch();
-              }}
-              style={{
-                borderWidth: 0,
-                borderRadius: 100,
-                color: "var(--nn_icon)",
-                marginRight: 10,
-                width: 39,
-                height: 39,
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                position: "relative"
-              }}
-            >
-              <MagnifyIcon
-                size={25}
-                style={{
-                  position: "absolute"
-                }}
-                color="var(--nn_pri)"
-              />
-            </Button>
-            <Button
-              onPress={() => {
-                post(EventTypes.monograph);
+                post(
+                  EditorEvents.showTabs,
+                  undefined,
+                  tab.id,
+                  tab.session?.noteId
+                );
               }}
               preventDefault={false}
               style={{
                 borderWidth: 0,
                 borderRadius: 100,
-                color: "var(--nn_icon)",
-                marginRight: 10,
-                width: 39,
-                height: 39,
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                position: "relative"
-              }}
-            >
-              <CloudUploadOutlineIcon
-                size={25}
-                style={{
-                  position: "absolute"
-                }}
-                color="var(--nn_pri)"
-              />
-            </Button>
-
-            {settings.deviceMode !== "mobile" && !settings.fullscreen ? (
-              <Button
-                onPress={() => {
-                  post(EventTypes.fullscreen);
-                }}
-                preventDefault={false}
-                style={{
-                  borderWidth: 0,
-                  borderRadius: 100,
-                  color: "var(--nn_icon)",
-                  marginRight: 10,
-                  width: 39,
-                  height: 39,
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  position: "relative"
-                }}
-              >
-                <FullscreenIcon
-                  size={25}
-                  style={{
-                    position: "absolute"
-                  }}
-                  color="var(--nn_pri)"
-                />
-              </Button>
-            ) : null}
-
-            <Button
-              onPress={() => {
-                post(EventTypes.properties);
-              }}
-              preventDefault={false}
-              style={{
-                borderWidth: 0,
-                borderRadius: 100,
-                color: "var(--nn_icon)",
+                color: "var(--nn_primary_icon)",
                 marginRight: 12,
                 width: 39,
                 height: 39,
@@ -310,17 +323,312 @@ export default function Header({
                 position: "relative"
               }}
             >
-              <DotsHorizontalIcon
-                size={25}
+              <div
                 style={{
-                  position: "absolute"
+                  border: "2px solid var(--nn_primary_icon)",
+                  width: 19 * settings.fontScale,
+                  height: 19 * settings.fontScale,
+                  minWidth: 19 * settings.fontScale,
+                  borderRadius: 5,
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center"
                 }}
-                color="var(--nn_pri)"
-              />
+              >
+                <p
+                  style={{
+                    fontSize:
+                      openedTabsCount > 100
+                        ? 10 * settings.fontScale
+                        : 12 * settings.fontScale
+                  }}
+                >
+                  {openedTabsCount}
+                </p>
+              </div>
             </Button>
+
+            <Button
+              fwdRef={btnRef}
+              onPress={() => {
+                if (tab.session?.locked) {
+                  post(
+                    EditorEvents.properties,
+                    undefined,
+                    tab.id,
+                    tab.session?.noteId
+                  );
+                } else {
+                  setOpen(!isOpen);
+                }
+              }}
+              preventDefault={false}
+              style={{
+                borderWidth: 0,
+                borderRadius: 100,
+                color: "var(--nn_primary_icon)",
+                marginRight: 12,
+                width: 39,
+                height: 39,
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                position: "relative"
+              }}
+            >
+              {tab.session?.locked ? (
+                <DotsHorizontalIcon
+                  size={25 * settings.fontScale}
+                  style={{
+                    position: "absolute"
+                  }}
+                  color="var(--nn_primary_icon)"
+                />
+              ) : (
+                <DotsVerticalIcon
+                  size={25 * settings.fontScale}
+                  style={{
+                    position: "absolute"
+                  }}
+                  color="var(--nn_primary_icon)"
+                />
+              )}
+            </Button>
+
+            <ControlledMenu
+              align="end"
+              anchorPoint={{
+                x: window.innerWidth - 10,
+                y: 70
+              }}
+              state={isOpen ? "open" : "closed"}
+              menuClassName={menuClassName}
+              onClose={() => {
+                setOpen(false);
+              }}
+              autoFocus={false}
+              onItemClick={(e) => {
+                switch (e.value) {
+                  case "toc":
+                    post(
+                      EditorEvents.toc,
+                      editorControllers[tab.id]?.getTableOfContents(),
+                      tab.id,
+                      tab.session?.noteId
+                    );
+                    break;
+                  case "search":
+                    editor?.commands.startSearch();
+                    break;
+                  case "newNote":
+                    post(
+                      EditorEvents.newNote,
+                      undefined,
+                      tab.id,
+                      tab.session?.noteId
+                    );
+                    break;
+                  case "properties":
+                    post(
+                      EditorEvents.properties,
+                      undefined,
+                      tab.id,
+                      tab.session?.noteId
+                    );
+                    break;
+                  default:
+                    break;
+                }
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  alignItems: "center",
+                  flexDirection: "row",
+                  justifyContent: "center",
+                  flex: 1,
+                  paddingTop: 5
+                }}
+              >
+                <Button
+                  onPress={() => {
+                    post(
+                      EditorEvents.goBack,
+                      undefined,
+                      tab.id,
+                      tab.session?.noteId
+                    );
+                    setOpen(false);
+                  }}
+                  style={{
+                    borderWidth: 0,
+                    borderRadius: 100,
+                    color: "var(--nn_primary_icon)",
+                    width: 39,
+                    height: 39,
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    position: "relative"
+                  }}
+                >
+                  <ArrowBackIcon
+                    color={
+                      !canGoBack
+                        ? "var(--nn_secondary_border)"
+                        : "var(--nn_primary_icon)"
+                    }
+                    size={25 * settings.fontScale}
+                    style={{
+                      position: "absolute"
+                    }}
+                  />
+                </Button>
+
+                <Button
+                  onPress={() => {
+                    post(
+                      EditorEvents.goForward,
+                      undefined,
+                      tab.id,
+                      tab.session?.noteId
+                    );
+                    setOpen(false);
+                  }}
+                  style={{
+                    borderWidth: 0,
+                    borderRadius: 100,
+                    color: "var(--nn_primary_icon)",
+                    width: 39,
+                    height: 39,
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    position: "relative"
+                  }}
+                >
+                  <ArrowForwardIcon
+                    color={
+                      !canGoForward
+                        ? "var(--nn_secondary_border)"
+                        : "var(--nn_primary_icon)"
+                    }
+                    size={25 * settings.fontScale}
+                    style={{
+                      position: "absolute"
+                    }}
+                  />
+                </Button>
+
+                <Button
+                  onPress={() => {
+                    editor?.commands.startSearch();
+                    setOpen(false);
+                  }}
+                  style={{
+                    borderWidth: 0,
+                    borderRadius: 100,
+                    color: "var(--nn_primary_icon)",
+                    width: 39,
+                    height: 39,
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    position: "relative"
+                  }}
+                >
+                  <MagnifyIcon
+                    size={28 * settings.fontScale}
+                    style={{
+                      position: "absolute"
+                    }}
+                    color="var(--nn_primary_icon)"
+                  />
+                </Button>
+              </div>
+
+              <MenuItem
+                value="newNote"
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  alignItems: "center"
+                }}
+              >
+                <PlusIcon
+                  size={22 * settings.fontScale}
+                  color="var(--nn_primary_icon)"
+                />
+                <span
+                  style={{
+                    color: "var(--nn_primary_paragraph)"
+                  }}
+                >
+                  New note
+                </span>
+              </MenuItem>
+
+              <MenuItem
+                value="toc"
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  alignItems: "center"
+                }}
+              >
+                <TableOfContentsIcon
+                  size={22 * settings.fontScale}
+                  color="var(--nn_primary_icon)"
+                />
+                <span
+                  style={{
+                    color: "var(--nn_primary_paragraph)"
+                  }}
+                >
+                  {strings.toc()}
+                </span>
+              </MenuItem>
+              <MenuItem
+                value="properties"
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  alignItems: "center"
+                }}
+              >
+                <DotsHorizontalIcon
+                  size={22 * settings.fontScale}
+                  color="var(--nn_primary_icon)"
+                />
+                <span
+                  style={{
+                    color: "var(--nn_primary_paragraph)"
+                  }}
+                >
+                  {strings.properties()}
+                </span>
+              </MenuItem>
+            </ControlledMenu>
           </div>
         </div>
       )}
     </div>
   );
 }
+
+export default React.memo(Header, (prev, next) => {
+  if (
+    prev.settings.deviceMode !== next.settings.deviceMode ||
+    prev.settings.fullscreen !== next.settings.fullscreen ||
+    prev.settings.premium !== next.settings.premium ||
+    prev.settings.fontScale !== next.settings.fontScale ||
+    prev.noHeader !== next.noHeader ||
+    prev.hasRedo !== next.hasRedo ||
+    prev.hasUndo !== next.hasUndo
+  )
+    return false;
+
+  return true;
+});

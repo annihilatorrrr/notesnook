@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -19,9 +19,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import { Box, Flex, Text } from "@theme-ui/components";
 import { useEffect, useState } from "react";
-import { Popup } from "../components/popup";
-import { useIsMobile } from "../stores/toolbar-store";
-import { InlineInput } from "../../components/inline-input";
+import { Popup } from "../components/popup.js";
+import { useIsMobile } from "../stores/toolbar-store.js";
+import { InlineInput } from "../../components/inline-input/index.js";
+import { strings } from "@notesnook/intl";
 
 const MAX_COLUMNS = 20;
 const MAX_ROWS = 20;
@@ -76,8 +77,8 @@ export function TablePopup(props: TablePopupProps) {
       action={{
         title:
           !cellLocation.column || !cellLocation.row
-            ? "Please set a table size"
-            : `Insert a ${cellLocation.column} x ${cellLocation.row} table`,
+            ? strings.setTableSizeNotice()
+            : strings.insertTableOfSize(cellLocation.row, cellLocation.column),
         disabled: !cellLocation.column || !cellLocation.row,
         onClick: () =>
           onInsertTable({
@@ -117,11 +118,14 @@ export function TablePopup(props: TablePopupProps) {
                 data-index={index}
                 sx={{
                   height: cellSize || 15,
-                  border: "1px solid var(--disabled)",
                   borderRadius: "small",
-                  bg: isCellHighlighted(index, cellLocation, tableSize)
-                    ? "disabled"
-                    : "transparent"
+                  border: "1px solid",
+                  ...(isCellHighlighted(index, cellLocation, tableSize)
+                    ? {
+                        bg: "background-selected",
+                        borderColor: "transparent"
+                      }
+                    : { bg: "transparent", borderColor: "border" })
                 }}
                 onTouchStart={() => {
                   setCellLocation(getCellLocation(index, tableSize));
@@ -146,11 +150,12 @@ export function TablePopup(props: TablePopupProps) {
             display: ["flex", "none", "none"],
             mt: 1,
             alignItems: "center",
-            justifyContent: "center"
+            justifyContent: "center",
+            maxWidth: "100%"
           }}
         >
           <InlineInput
-            containerProps={{ sx: { mr: 1 } }}
+            containerProps={{ sx: { mr: 1, flexShrink: 1 } }}
             label="columns"
             placeholder={`${cellLocation.column} columns`}
             type="number"
@@ -163,6 +168,7 @@ export function TablePopup(props: TablePopupProps) {
             }}
           />
           <InlineInput
+            containerProps={{ sx: { flexShrink: 1 } }}
             label="rows"
             placeholder={`${cellLocation.row} rows`}
             type="number"

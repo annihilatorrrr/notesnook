@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,15 +17,16 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+import { Node, nodeInputRule, mergeAttributes } from "@tiptap/core";
+import { hasSameAttributes } from "../../utils/prosemirror.js";
 import {
-  Node,
-  nodeInputRule,
-  mergeAttributes,
-  findChildren
-} from "@tiptap/core";
-import { Attachment, getDataAttribute } from "../attachment";
-import { createSelectionBasedNodeView } from "../react";
-import { ImageComponent } from "./component";
+  ImageAlignmentOptions,
+  ImageAttachment,
+  getDataAttribute
+} from "../attachment/index.js";
+import { createNodeView } from "../react/index.js";
+import { TextDirections } from "../text-direction/index.js";
+import { ImageComponent } from "./component.js";
 
 export interface ImageOptions {
   inline: boolean;
@@ -33,19 +34,11 @@ export interface ImageOptions {
   HTMLAttributes: Record<string, unknown>;
 }
 
-export type ImageAttributes = Partial<ImageSizeOptions> &
-  Partial<Attachment> & {
-    src: string;
-    alt?: string;
-    title?: string;
-  };
-
-export type ImageAlignmentOptions = {
-  float?: boolean;
-  align?: "center" | "left" | "right";
+export type ImageAttributes = ImageAttachment & {
+  textDirection?: TextDirections;
 };
 
-export type ImageSizeOptions = {
+export type ImageSize = {
   width: number;
   height: number;
 };
@@ -56,18 +49,14 @@ declare module "@tiptap/core" {
       /**
        * Add an image
        */
-      insertImage: (options: ImageAttributes) => ReturnType;
-      updateImage: (
-        query: { src?: string; hash?: string },
-        options: ImageAttributes & { preventUpdate?: boolean }
-      ) => ReturnType;
+      insertImage: (options: Partial<ImageAttributes>) => ReturnType;
       setImageAlignment: (options: ImageAlignmentOptions) => ReturnType;
-      setImageSize: (options: ImageSizeOptions) => ReturnType;
+      setImageSize: (size: ImageSize) => ReturnType;
     };
   }
 }
 
-export const inputRegex = /(!\[(.+|:?)]\((\S+)(?:(?:\s+)["'](\S+)["'])?\))$/;
+const inputRegex = /(!\[(.+|:?)]\((\S+)(?:(?:\s+)["'](\S+)["'])?\))$/;
 
 export const ImageNode = Node.create<ImageOptions>({
   name: "image",
@@ -92,13 +81,13 @@ export const ImageNode = Node.create<ImageOptions>({
 
   addAttributes() {
     return {
+      type: { default: "image", rendered: false },
+      progress: {
+        default: 0,
+        rendered: false
+      },
+
       src: {
-        default: null
-      },
-      alt: {
-        default: null
-      },
-      title: {
         default: null
       },
       width: { default: null },
@@ -106,12 +95,28 @@ export const ImageNode = Node.create<ImageOptions>({
 
       // TODO: maybe these should be stored as styles?
       float: getDataAttribute("float", false),
-      align: getDataAttribute("align", "left"),
+      align: getDataAttribute("align"),
 
       hash: getDataAttribute("hash"),
       filename: getDataAttribute("filename"),
-      type: getDataAttribute("mime"),
-      size: getDataAttribute("size")
+      mime: getDataAttribute("mime"),
+      size: getDataAttribute("size"),
+      aspectRatio: {
+        default: undefined,
+        parseHTML: (element) =>
+          element.dataset.aspectRatio
+            ? parseFloat(element.dataset.aspectRatio)
+            : 1,
+        renderHTML: (attributes) => {
+          if (!attributes.aspectRatio) {
+            return {};
+          }
+
+          return {
+            [`data-aspect-ratio`]: attributes.aspectRatio
+          };
+        }
+      }
     };
   },
 
@@ -131,14 +136,27 @@ export const ImageNode = Node.create<ImageOptions>({
   },
 
   addNodeView() {
-    return createSelectionBasedNodeView(ImageComponent);
+    return createNodeView(ImageComponent, {
+      componentKey: (node) => node.attrs.hash,
+      shouldUpdate: (prev, next) => !hasSameAttributes(prev.attrs, next.attrs),
+      forceEnableSelection: true
+    });
   },
 
   addCommands() {
     return {
       insertImage:
         (options) =>
-        ({ commands }) => {
+        ({ commands, state }) => {
+          const { $from } = state.selection;
+          const maybeImageNode = state.doc.nodeAt($from.pos);
+          if (maybeImageNode?.type === this.type) {
+            return commands.insertContentAt($from.pos + 1, {
+              type: this.name,
+              attrs: options
+            });
+          }
+
           return commands.insertContent({
             type: this.name,
             attrs: options
@@ -161,33 +179,6 @@ export const ImageNode = Node.create<ImageOptions>({
             .updateAttributes(this.name, { ...options })
             .setNodeSelection(from)
             .run();
-        },
-      updateImage:
-        (query, options) =>
-        ({ state, tr, dispatch }) => {
-          const keyedQuery = query.hash
-            ? { key: "hash", value: query.hash }
-            : query.src
-            ? { key: "src", value: query.src }
-            : null;
-          if (!keyedQuery) return false;
-
-          const images = findChildren(
-            state.doc,
-            (node) =>
-              node.type.name === this.name &&
-              node.attrs[keyedQuery.key] === keyedQuery.value
-          );
-          for (const image of images) {
-            tr.setNodeMarkup(image.pos, image.node.type, {
-              ...image.node.attrs,
-              ...options
-            });
-          }
-          tr.setMeta("preventUpdate", options.preventUpdate || false);
-          tr.setMeta("addToHistory", false);
-          if (dispatch) dispatch(tr);
-          return true;
         }
     };
   },
@@ -204,5 +195,12 @@ export const ImageNode = Node.create<ImageOptions>({
         }
       })
     ];
+  },
+
+  addKeyboardShortcuts() {
+    return {
+      "Mod-Shift-I": () =>
+        this.editor.storage.openAttachmentPicker?.("image") || true
+    };
   }
 });

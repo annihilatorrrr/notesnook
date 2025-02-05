@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -34,10 +34,6 @@ export const eCloseMoveNoteDialog = "506";
 export const eOpenAddNotebookDialog = "507";
 
 export const eCloseAddNotebookDialog = "508";
-
-export const eOpenAddTopicDialog = "509";
-
-export const eCloseAddTopicDialog = "510";
 
 export const eOpenLoginDialog = "511";
 
@@ -73,7 +69,7 @@ export const eThemeUpdated = "527";
 
 export const eScrollEvent = "528";
 
-export const eOnNewTopicAdded = "529";
+export const eUpdateNotebookRoute = "529";
 
 export const eOpenVaultDialog = "530";
 
@@ -117,9 +113,9 @@ export const eOpenPremiumStatusDialog = "549";
 
 export const eClosePremiumStatusDialog = "550";
 
-export const eOpenProgressDialog = "551";
+export const eOpenSheet = "551";
 
-export const eCloseProgressDialog = "552";
+export const eCloseSheet = "552";
 
 export const eOpenRestoreDialog = "553";
 
@@ -155,3 +151,27 @@ export const eOpenTrialEndingDialog = "602";
 
 export const eOpenAnnouncementDialog = "603";
 export const eCloseAnnouncementDialog = "604";
+
+export const eOpenLoading = "605";
+export const eCloseLoading = "606";
+
+export const eOnNotebookUpdated = "607";
+
+export const eUserLoggedIn = "608";
+
+export const eLoginSessionExpired = "609";
+export const eDBItemUpdate = "610";
+export const eGroupOptionsUpdated = "611";
+export const eOnRefreshSearch = "612";
+
+export const eOpenAppLockPasswordDialog = "613";
+export const eCloseAppLocKPasswordDailog = "614";
+export const eEditorTabFocused = "615";
+export const eUnlockNote = "616";
+export const eOnChangeFluidTab = "617";
+export const eUnlockWithBiometrics = "618";
+export const eUnlockWithPassword = "619";
+export const eUpdateNoteInEditor = "620";
+export const eOnEnterEditor = "621";
+export const eOnExitEditor = "622";
+export const eEditorReset = "623";

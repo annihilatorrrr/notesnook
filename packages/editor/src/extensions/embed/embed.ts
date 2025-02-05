@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -18,8 +18,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 import { Node, mergeAttributes } from "@tiptap/core";
-import { createSelectionBasedNodeView } from "../react";
-import { EmbedComponent } from "./component";
+import { hasSameAttributes } from "../../utils/prosemirror.js";
+import { createNodeView } from "../react/index.js";
+import { TextDirections } from "../text-direction/index.js";
+import { EmbedComponent } from "./component.js";
 
 export interface EmbedOptions {
   HTMLAttributes: Record<string, unknown>;
@@ -31,6 +33,7 @@ export type EmbedAttributes = Partial<EmbedSizeOptions> & {
 
 export type EmbedAlignmentOptions = {
   align?: "center" | "left" | "right";
+  textDirection?: TextDirections;
 };
 
 export type Embed = Required<EmbedAttributes> & EmbedAlignmentOptions;
@@ -59,6 +62,7 @@ export const EmbedNode = Node.create<EmbedOptions>({
   content: "",
   marks: "",
   draggable: true,
+  priority: 50,
 
   addOptions() {
     return {
@@ -77,7 +81,7 @@ export const EmbedNode = Node.create<EmbedOptions>({
       },
       width: { default: null },
       height: { default: null },
-      align: { default: "left" }
+      align: { default: undefined }
     };
   },
 
@@ -97,7 +101,9 @@ export const EmbedNode = Node.create<EmbedOptions>({
   },
 
   addNodeView() {
-    return createSelectionBasedNodeView(EmbedComponent);
+    return createNodeView(EmbedComponent, {
+      shouldUpdate: (prev, next) => !hasSameAttributes(prev.attrs, next.attrs)
+    });
   },
 
   addCommands() {

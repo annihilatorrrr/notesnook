@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,22 +17,22 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import React, { SyntheticEvent } from "react";
+import React, { FunctionComponent, SyntheticEvent } from "react";
 import { NodeView, Decoration, DecorationSource } from "prosemirror-view";
 import { Node as PMNode, Slice } from "prosemirror-model";
 import { NodeSelection } from "prosemirror-state";
-import { PortalProviderAPI } from "./react-portal-provider";
+import { PortalProviderAPI } from "./react-portal-provider.js";
 import {
   ReactNodeViewProps,
   ReactNodeViewOptions,
   GetPosNode,
-  ForwardRef,
   ContentDOM
-} from "./types";
-import { NodeViewRendererProps } from "@tiptap/core";
+} from "./types.js";
+import { Editor, NodeViewRendererProps } from "@tiptap/core";
 import { __serializeForClipboard, EditorView } from "prosemirror-view";
-import { Editor } from "../../types";
-import { ThemeProvider } from "../../components/theme-provider";
+import { EmotionThemeProvider } from "@notesnook/theme";
+import { isAndroid, isiOS } from "../../utils/platform.js";
+import { useToolbarStore } from "../../toolbar/stores/toolbar-store.js";
 
 // This is hacky workaround to manually handle serialization when
 // drag/dropping on mobile devices.
@@ -42,15 +42,17 @@ declare module "prosemirror-view" {
     slice: Slice
   ): { dom: HTMLElement; text: string };
 }
-
+const portalProviderAPI = new PortalProviderAPI();
 export class ReactNodeView<P extends ReactNodeViewProps> implements NodeView {
   private domRef!: HTMLElement;
   private contentDOMWrapper?: Node;
 
-  contentDOM: HTMLElement | undefined;
+  contentDOM?: HTMLElement;
   node: PMNode;
   isDragging = false;
-  portalProviderAPI: PortalProviderAPI;
+  selected = false;
+  pos = -1;
+  posEnd: number | undefined;
 
   constructor(
     node: PMNode,
@@ -58,9 +60,18 @@ export class ReactNodeView<P extends ReactNodeViewProps> implements NodeView {
     protected readonly getPos: GetPosNode,
     protected readonly options: ReactNodeViewOptions<P>
   ) {
-    this.portalProviderAPI = editor.storage
-      .portalProviderAPI as PortalProviderAPI;
     this.node = node;
+    this.#updatePos();
+  }
+
+  deselectNode() {
+    this.selected = false;
+    this.render();
+  }
+
+  selectNode() {
+    this.selected = true;
+    this.render();
   }
 
   /**
@@ -75,12 +86,8 @@ export class ReactNodeView<P extends ReactNodeViewProps> implements NodeView {
   init() {
     this.domRef = this.createDomRef();
     this.domRef.ondragstart = (ev) => this.onDragStart(ev);
-    // this.setDomAttrs(this.node, this.domRef);
 
-    const { dom: contentDOMWrapper, contentDOM } = this.getContentDOM() || {
-      dom: undefined,
-      contentDOM: undefined
-    };
+    const { dom: contentDOMWrapper, contentDOM } = this.getContentDOM() ?? {};
 
     if (this.domRef && contentDOMWrapper) {
       this.domRef.appendChild(contentDOMWrapper);
@@ -93,23 +100,19 @@ export class ReactNodeView<P extends ReactNodeViewProps> implements NodeView {
     // nodeView if DOM structure has nested plain "div"s, it doesn't see the
     // difference between them and it kills the nodeView
     this.domRef.classList.add(`${this.node.type.name}-view-content-wrap`);
-
-    this.renderReactComponent(() =>
-      this.render(this.options.props, this.handleRef)
-    );
+    this.render();
 
     return this;
   }
 
-  private renderReactComponent(
-    component: () => React.ReactElement<unknown> | null
-  ) {
-    if (!this.domRef || !component || !this.portalProviderAPI) {
-      console.warn("Cannot render node view", this.editor.storage);
+  private render() {
+    if (process.env.NODE_ENV === "test") return;
+    if (!this.domRef) {
+      console.warn("Cannot render node view");
       return;
     }
 
-    this.portalProviderAPI.render(component, this.domRef);
+    portalProviderAPI.render(this.Component, this.domRef);
   }
 
   createDomRef(): HTMLElement {
@@ -135,52 +138,65 @@ export class ReactNodeView<P extends ReactNodeViewProps> implements NodeView {
       content.style.minWidth = "20px";
       return { dom: content };
     }
-    return this.options.contentDOMFactory?.();
+    return this.options.contentDOMFactory?.(this.node);
+  }
+
+  #updatePos() {
+    this.pos = this.getPos();
+    this.posEnd = this.pos + this.node.nodeSize;
   }
 
   handleRef = (node: HTMLElement | null) => this._handleRef(node);
 
-  private _handleRef(node: HTMLElement | null) {
+  private _handleRef = (node: HTMLElement | null) => {
     const contentDOM = this.contentDOMWrapper || this.contentDOM;
 
     // move the contentDOM node inside the inner reference after rendering
     if (node && contentDOM && !node.contains(contentDOM)) {
       node.appendChild(contentDOM);
     }
-  }
+  };
 
-  render(
-    props: P = {} as P,
-    forwardRef?: ForwardRef
-  ): React.ReactElement<unknown> | null {
+  Component: FunctionComponent = () => {
     if (!this.options.component) return null;
-
     return (
-      <ThemeProvider>
+      <EmotionThemeProvider
+        scope="editor"
+        injectCssVars={false}
+        theme={
+          useToolbarStore.getState().isMobile
+            ? { space: [0, 10, 12, 20] }
+            : undefined
+        }
+      >
         <this.options.component
-          {...props}
+          {...(this.options.props as P)}
+          pos={this.pos}
           editor={this.editor}
           getPos={this.getPos}
           node={this.node}
-          forwardRef={forwardRef}
+          forwardRef={this._handleRef}
+          selected={this.selected}
           updateAttributes={(attr, options) =>
             this.updateAttributes(
               attr,
               this.getPos(),
               options?.addToHistory,
-              options?.preventUpdate
+              options?.preventUpdate,
+              options?.forceUpdate
             )
           }
         />
-      </ThemeProvider>
+      </EmotionThemeProvider>
     );
-  }
+  };
 
   updateAttributes(
     attributes: object,
     pos: number,
     addToHistory = false,
-    preventUpdate = false
+    preventUpdate = false,
+    forceUpdate = false
   ) {
     this.editor.commands.command(({ tr }) => {
       tr.setNodeMarkup(pos, undefined, {
@@ -189,6 +205,7 @@ export class ReactNodeView<P extends ReactNodeViewProps> implements NodeView {
       });
       tr.setMeta("addToHistory", addToHistory);
       tr.setMeta("preventUpdate", preventUpdate);
+      tr.setMeta("forceUpdate", forceUpdate);
       return true;
     });
   }
@@ -219,9 +236,9 @@ export class ReactNodeView<P extends ReactNodeViewProps> implements NodeView {
 
     this.node = node;
 
-    this.renderReactComponent(() =>
-      this.render(this.options.props, this.handleRef)
-    );
+    this.#updatePos();
+
+    this.render();
 
     return true;
   }
@@ -230,23 +247,32 @@ export class ReactNodeView<P extends ReactNodeViewProps> implements NodeView {
     const { view } = this.editor;
     const target = event.target as HTMLElement;
 
-    // get the drag handle element
-    // `closest` is not available for text nodes so we may have to use its parent
-    const dragHandle =
-      target.nodeType === 3
-        ? target.parentElement?.closest("[data-drag-handle]")
-        : target.closest("[data-drag-handle]");
+    const dragHandle = this.dom.querySelector("[data-drag-handle]");
+    const dragImage = this.dom.querySelector("[data-drag-image]") || this.dom;
 
-    if (!this.dom || this.contentDOM?.contains(target) || !dragHandle) {
-      return;
+    if (!this.dom || this.contentDOM?.contains(target) || !dragHandle) return;
+
+    // workaround to prevent opening of keyboard on drag start
+    if (isAndroid || isiOS) {
+      setTimeout(() => {
+        (dragImage as HTMLElement).blur();
+        document.body.focus();
+        this.editor.commands.blur();
+      });
     }
 
-    const dragImage = this.dom.querySelector("[data-drag-image]") || this.dom;
+    // temporary border around the dragged element for better identification
+    (dragImage as HTMLElement).style.border =
+      "2px solid var(--paragraph, var(--nn_primary_paragraph))";
+    setTimeout(function () {
+      (dragImage as HTMLElement).style.border = "none";
+    });
 
     let x = 0;
     let y = 0;
 
-    // calculate offset for drag element if we use a different drag handle element
+    // calculate offset for drag element if we use a different drag handle
+    // element. Unfortunately, this has no effect on Android
     if (dragImage !== dragHandle) {
       const domBox = dragImage.getBoundingClientRect();
       const handleBox = dragHandle.getBoundingClientRect();
@@ -272,8 +298,8 @@ export class ReactNodeView<P extends ReactNodeViewProps> implements NodeView {
 
     view.dispatch(transaction);
 
-    event.dataTransfer?.setDragImage(dragImage, x, y);
     forceHandleDrag(event, this.editor);
+    event.dataTransfer?.setDragImage(dragImage, x, y);
   }
 
   stopEvent(event: Event): boolean {
@@ -288,7 +314,6 @@ export class ReactNodeView<P extends ReactNodeViewProps> implements NodeView {
     const target = event.target as HTMLElement;
     const isInElement =
       this.dom.contains(target) && !this.contentDOM?.contains(target);
-
     // any event from child nodes should be handled by ProseMirror
     if (!isInElement) {
       return false;
@@ -304,8 +329,8 @@ export class ReactNodeView<P extends ReactNodeViewProps> implements NodeView {
       return true;
     }
 
-    const { isEditable } = this.editor;
-    const { isDragging } = this;
+    // const { isEditable } = this.editor;
+    // const { isDragging } = this;
     const isDraggable = !!this.node.type.spec.draggable;
     const isSelectable = NodeSelection.isSelectable(this.node);
     const isCopyEvent = event.type === "copy";
@@ -314,16 +339,6 @@ export class ReactNodeView<P extends ReactNodeViewProps> implements NodeView {
     const isClickEvent = event.type === "mousedown";
     const isDragEvent = event.type.startsWith("drag");
 
-    // if (event instanceof DragEvent && event.dataTransfer) {
-    //   console.log(
-    //     `[${event.type}]:`,
-    //     this.editor.view.dragging,
-    //     event.dataTransfer.getData("Text"),
-    //     event.dataTransfer.getData("text/plain"),
-    //     event.dataTransfer.getData("text/html")
-    //   );
-    // }
-
     // ProseMirror tries to drag selectable nodes
     // even if `draggable` is set to `false`
     // this fix prevents that
@@ -331,42 +346,42 @@ export class ReactNodeView<P extends ReactNodeViewProps> implements NodeView {
       event.preventDefault();
     }
 
-    if (isDraggable && isDragEvent && !isDragging) {
-      event.preventDefault();
-      return false;
-    }
+    // if (isDraggable && isDragEvent && !isDragging) {
+    //   event.preventDefault();
+    //   return false;
+    // }
 
-    // we have to store that dragging started
-    if (isDraggable && isEditable && !isDragging && isClickEvent) {
-      const dragHandle = target.closest("[data-drag-handle]");
-      const isValidDragHandle =
-        dragHandle &&
-        (this.dom === dragHandle || this.dom.contains(dragHandle));
+    // // we have to store that dragging started
+    // if (isDraggable && isEditable && !isDragging && isClickEvent) {
+    //   const dragHandle = target.closest("[data-drag-handle]");
+    //   const isValidDragHandle =
+    //     dragHandle &&
+    //     (this.dom === dragHandle || this.dom.contains(dragHandle));
 
-      if (isValidDragHandle) {
-        this.isDragging = true;
+    //   if (isValidDragHandle) {
+    //     this.isDragging = true;
 
-        document.addEventListener(
-          "dragend",
-          () => {
-            this.isDragging = false;
-          },
-          { once: true }
-        );
+    //     document.addEventListener(
+    //       "dragend",
+    //       () => {
+    //         this.isDragging = false;
+    //       },
+    //       { once: true }
+    //     );
 
-        document.addEventListener(
-          "mouseup",
-          () => {
-            this.isDragging = false;
-          },
-          { once: true }
-        );
-      }
-    }
+    //     document.addEventListener(
+    //       "mouseup",
+    //       () => {
+    //         this.isDragging = false;
+    //       },
+    //       { once: true }
+    //     );
+    //   }
+    // }
 
     // these events are handled by prosemirror
     if (
-      isDragging ||
+      // isDragging ||
       isDropEvent ||
       isCopyEvent ||
       isPasteEvent ||
@@ -457,13 +472,8 @@ export class ReactNodeView<P extends ReactNodeViewProps> implements NodeView {
   }
 
   destroy() {
-    if (!this.domRef || !this.portalProviderAPI) {
-      return;
-    }
-
-    this.portalProviderAPI.remove(this.domRef);
-    // this.domRef = undefined;
-    this.contentDOM = undefined;
+    portalProviderAPI.remove(this.domRef);
+    this.domRef.remove();
   }
 }
 
@@ -494,4 +504,9 @@ function forceHandleDrag(event: DragEvent, editor: Editor) {
   event.dataTransfer.effectAllowed = "copyMove";
 
   view.dragging = { slice, move: true };
+
+  // a small workaround to identity when a nodeView is being dragged
+  if (isAndroid || isiOS) {
+    (view.dragging as any).nodeView = true;
+  }
 }

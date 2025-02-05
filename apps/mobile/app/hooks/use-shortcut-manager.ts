@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -22,14 +22,20 @@ import { NativeEventEmitter, NativeModule } from "react-native";
 import { useRef } from "react";
 import { Platform } from "react-native";
 import { Linking } from "react-native";
+import deviceInfoModule from "react-native-device-info";
+import { strings } from "@notesnook/intl";
 const ShortcutsEmitter = new NativeEventEmitter(
   Shortcuts as unknown as NativeModule
 );
+
+function isSupported() {
+  return Platform.OS !== "android" || deviceInfoModule.getApiLevelSync() > 25;
+}
 const defaultShortcuts: ShortcutItem[] = [
   {
     type: "notesnook.action.newnote",
-    title: "Create a new note",
-    shortTitle: "New note",
+    title: strings.createNewNote(),
+    shortTitle: strings.newNote(),
     iconName: Platform.OS === "android" ? "ic_newnote" : "plus"
   }
 ];
@@ -43,6 +49,7 @@ export const useShortcutManager = ({
   const initialShortcutRecieved = useRef(false);
 
   useEffect(() => {
+    if (!isSupported()) return;
     Shortcuts.setShortcuts(shortcuts);
   }, [shortcuts]);
 
@@ -52,6 +59,7 @@ export const useShortcutManager = ({
         onShortcutPressed(defaultShortcuts[0]);
       }
     });
+    if (!isSupported()) return;
     Shortcuts.getInitialShortcut().then((shortcut) => {
       if (initialShortcutRecieved.current) return;
       onShortcutPressed(shortcut);

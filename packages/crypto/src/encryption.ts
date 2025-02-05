@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,55 +17,45 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import {
-  crypto_aead_xchacha20poly1305_ietf_encrypt,
-  crypto_secretstream_xchacha20poly1305_init_push,
-  crypto_secretstream_xchacha20poly1305_push,
-  randombytes_buf,
-  crypto_aead_xchacha20poly1305_ietf_NPUBBYTES,
-  crypto_secretstream_xchacha20poly1305_TAG_FINAL,
-  crypto_secretstream_xchacha20poly1305_TAG_MESSAGE,
-  to_base64,
-  from_base64,
-  base64_variants,
-  StateAddress
-} from "libsodium-wrappers";
-import KeyUtils from "./keyutils";
-import {
-  Cipher,
-  EncryptionKey,
-  OutputFormat,
-  Plaintext,
-  SerializedKey
-} from "./types";
+import { ISodium, base64_variants } from "@notesnook/sodium";
+import KeyUtils from "./keyutils.js";
+import { Chunk, Cipher, Input, DataFormat, SerializedKey } from "./types.js";
 
 const encoder = new TextEncoder();
 export default class Encryption {
-  private static transformInput(plaintext: Plaintext): Uint8Array {
+  private static transformInput(
+    sodium: ISodium,
+    input: Input<DataFormat>,
+    format: DataFormat
+  ): Uint8Array {
     let data: Uint8Array | null = null;
-    if (typeof plaintext.data === "string" && plaintext.format === "base64") {
-      data = from_base64(plaintext.data, base64_variants.ORIGINAL);
-    } else if (typeof plaintext.data === "string") {
-      data = encoder.encode(plaintext.data);
-    } else if (plaintext.data instanceof Uint8Array) {
-      data = plaintext.data;
+    if (typeof input === "string" && format === "base64") {
+      data = sodium.from_base64(input, base64_variants.ORIGINAL);
+    } else if (typeof input === "string") {
+      data = encoder.encode(input);
+    } else if (input instanceof Uint8Array) {
+      data = input;
     }
     if (!data) throw new Error("Data cannot be null.");
     return data;
   }
 
-  static encrypt(
+  static encrypt<TOutputFormat extends DataFormat>(
+    sodium: ISodium,
     key: SerializedKey,
-    plaintext: Plaintext,
-    outputFormat: OutputFormat = "uint8array"
-  ): Cipher {
-    const encryptionKey = KeyUtils.transform(key);
-    const data = this.transformInput(plaintext);
+    input: Input<DataFormat>,
+    format: DataFormat,
+    outputFormat: TOutputFormat = "uint8array" as TOutputFormat
+  ): Cipher<TOutputFormat> {
+    const encryptionKey = KeyUtils.transform(sodium, key);
+    const data = this.transformInput(sodium, input, format);
 
-    const nonce = randombytes_buf(crypto_aead_xchacha20poly1305_ietf_NPUBBYTES);
+    const nonce = sodium.randombytes_buf(
+      sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES
+    );
 
     const cipher: string | Uint8Array =
-      crypto_aead_xchacha20poly1305_ietf_encrypt(
+      sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
         data,
         null,
         null,
@@ -75,10 +65,10 @@ export default class Encryption {
 
     let output: string | Uint8Array = cipher;
     if (outputFormat === "base64") {
-      output = to_base64(cipher, base64_variants.URLSAFE_NO_PADDING);
+      output = sodium.to_base64(cipher, base64_variants.URLSAFE_NO_PADDING);
     }
 
-    const iv = to_base64(nonce);
+    const iv = sodium.to_base64(nonce);
     return {
       format: outputFormat,
       alg: getAlgorithm(base64_variants.URLSAFE_NO_PADDING),
@@ -86,35 +76,39 @@ export default class Encryption {
       iv,
       salt: encryptionKey.salt,
       length: data.length
+    } as Cipher<TOutputFormat>;
+  }
+
+  static createStream(
+    sodium: ISodium,
+    key: SerializedKey
+  ): {
+    iv: string;
+    stream: TransformStream<Chunk, Uint8Array>;
+  } {
+    const { key: _key } = KeyUtils.transform(sodium, key);
+    const { state, header } =
+      sodium.crypto_secretstream_xchacha20poly1305_init_push(_key, "base64");
+
+    return {
+      iv: header,
+      stream: new TransformStream<Chunk, Uint8Array>({
+        start() {},
+        transform(chunk, controller) {
+          controller.enqueue(
+            sodium.crypto_secretstream_xchacha20poly1305_push(
+              state,
+              chunk.data,
+              null,
+              chunk.final
+                ? sodium.crypto_secretstream_xchacha20poly1305_TAG_FINAL
+                : sodium.crypto_secretstream_xchacha20poly1305_TAG_MESSAGE
+            )
+          );
+          if (chunk.final) controller.terminate();
+        }
+      })
     };
-  }
-
-  static createStream(key: SerializedKey): EncryptionStream {
-    return new EncryptionStream(KeyUtils.transform(key));
-  }
-}
-
-class EncryptionStream {
-  state: StateAddress;
-  header: string;
-  constructor(key: EncryptionKey) {
-    const { state, header } = crypto_secretstream_xchacha20poly1305_init_push(
-      key.key,
-      "base64"
-    );
-    this.state = state;
-    this.header = header;
-  }
-
-  write(chunk: Uint8Array, final?: boolean): Uint8Array {
-    return crypto_secretstream_xchacha20poly1305_push(
-      this.state,
-      chunk,
-      null,
-      final
-        ? crypto_secretstream_xchacha20poly1305_TAG_FINAL
-        : crypto_secretstream_xchacha20poly1305_TAG_MESSAGE
-    );
   }
 }
 

@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 import { Editor } from "@tiptap/core";
-import { selectedRect, TableRect } from "@_ueberdosis/prosemirror-tables";
+import { selectedRect, TableRect } from "@tiptap/pm/tables";
 import { Transaction } from "prosemirror-state";
 import { Node } from "prosemirror-model";
 
@@ -52,7 +52,7 @@ function moveColumnLeft(editor: Editor) {
 function moveRowDown(editor: Editor) {
   const { tr } = editor.state;
   const rect = selectedRect(editor.state);
-  if (rect.top + 1 === rect.map.height) return;
+  if (rect.top + 1 === rect.map.height || rect.top === 0) return;
 
   const transaction = moveRow(tr, rect, rect.top, rect.top + 1);
   if (!transaction) return;
@@ -63,7 +63,7 @@ function moveRowDown(editor: Editor) {
 function moveRowUp(editor: Editor) {
   const { tr } = editor.state;
   const rect = selectedRect(editor.state);
-  if (rect.top === 0) return;
+  if (rect.top === 0 || rect.top === 1) return;
 
   const transaction = moveRow(tr, rect, rect.top, rect.top - 1);
   if (!transaction) return;

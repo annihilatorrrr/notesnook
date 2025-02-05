@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,12 +17,12 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { ToolProps } from "../types";
-import { ToolButton } from "../components/tool-button";
-import { MoreTools } from "../components/more-tools";
-import { useToolbarLocation } from "../stores/toolbar-store";
-import { findSelectedNode } from "../utils/prosemirror";
-import { Attachment } from "../../extensions/attachment";
+import { ToolProps } from "../types.js";
+import { ToolButton } from "../components/tool-button.js";
+import { MoreTools } from "../components/more-tools.js";
+import { useToolbarLocation } from "../stores/toolbar-store.js";
+import { findSelectedNode } from "../../utils/prosemirror.js";
+import { Attachment } from "../../extensions/attachment/index.js";
 
 export function AttachmentSettings(props: ToolProps) {
   const { editor } = props;
@@ -34,7 +34,11 @@ export function AttachmentSettings(props: ToolProps) {
       {...props}
       autoCloseOnUnmount
       popupId="attachmentSettings"
-      tools={["downloadAttachment", "removeAttachment"]}
+      tools={
+        editor.isEditable
+          ? ["downloadAttachment"]
+          : ["downloadAttachment", "removeAttachment"]
+      }
     />
   );
 }
@@ -47,9 +51,37 @@ export function DownloadAttachment(props: ToolProps) {
       {...props}
       toggled={false}
       onClick={() => {
-        const attachmentNode = findSelectedNode(editor, "attachment");
+        const attachmentNode =
+          findSelectedNode(editor, "attachment") ||
+          findSelectedNode(editor, "image");
+
         const attachment = (attachmentNode?.attrs || {}) as Attachment;
-        editor.current?.chain().focus().downloadAttachment(attachment).run();
+        editor.storage.downloadAttachment?.(attachment);
+      }}
+    />
+  );
+}
+
+export function PreviewAttachment(props: ToolProps) {
+  const { editor } = props;
+  const attachmentNode =
+    findSelectedNode(editor, "attachment") || findSelectedNode(editor, "image");
+  const attachment = (attachmentNode?.attrs || {}) as Attachment;
+
+  if (!editor.isActive("image") && !canPreviewAttachment(attachment))
+    return null;
+
+  return (
+    <ToolButton
+      {...props}
+      toggled={false}
+      onClick={() => {
+        const attachmentNode =
+          findSelectedNode(editor, "attachment") ||
+          findSelectedNode(editor, "image");
+
+        const attachment = (attachmentNode?.attrs || {}) as Attachment;
+        editor.storage.previewAttachment?.(attachment);
       }}
     />
   );
@@ -61,7 +93,24 @@ export function RemoveAttachment(props: ToolProps) {
     <ToolButton
       {...props}
       toggled={false}
-      onClick={() => editor.current?.chain().focus().removeAttachment().run()}
+      onClick={() => editor.chain().focus().removeAttachment().run()}
     />
   );
+}
+
+const previewableFileExtensions = ["pdf"];
+const previewableMimeTypes = ["application/pdf"];
+
+function canPreviewAttachment(attachment: Attachment) {
+  if (!attachment) return false;
+  if (
+    attachment.mime &&
+    previewableMimeTypes.some((mime) => attachment.mime.startsWith(mime))
+  )
+    return true;
+
+  const extension = attachment.filename?.split(".").pop();
+  if (!extension) return false;
+
+  return previewableFileExtensions.indexOf(extension) > -1;
 }

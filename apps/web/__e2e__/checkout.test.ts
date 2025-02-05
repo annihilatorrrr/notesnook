@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -29,14 +29,10 @@ let page: Page;
 let app: AppModel;
 
 test.beforeAll(async ({ browser }) => {
-  const { email, key, password } = USER.CURRENT;
-  if (!email || !password) throw new Error("Failed to load user credentials.");
-
-  // Create page yourself and sign in.
   page = await browser.newPage();
   app = new AppModel(page);
   await app.auth.goto();
-  await app.auth.login({ email, key, password });
+  await app.auth.login(USER.CURRENT);
 });
 
 test.afterAll(async () => {
@@ -44,16 +40,19 @@ test.afterAll(async () => {
 });
 
 test.afterEach(async () => {
-  await app.goto();
+  await app.goto(true);
 });
 
 function roundOffPrices(prices: PriceItem[]) {
   return prices
     .map((p) => {
-      const price = p.value.replace(/(\d+).(\d+)/gm, (_, whole, decimal) => {
-        const decimalDigits = "0".repeat(decimal.length);
-        const wholeDigits = "0".repeat(whole.length - 1);
-        return `${whole[0]}${wholeDigits}.${decimalDigits}`;
+      const price = p.value.replace(/(\d+)\.(\d+)/gm, (_, whole, decimal) => {
+        const stabalizePrice =
+          Math.max(
+            0,
+            Math.ceil(Math.log10(parseFloat(`${whole}.${decimal}`)))
+          ) * 100;
+        return `${stabalizePrice}`;
       });
       return `${p.label}: ${price}`;
     })
@@ -124,6 +123,7 @@ test("applying coupon should change discount & total price", async () => {
     const pricing = await plan.open();
     const title = await pricing.getTitle();
     if (!title) continue;
+    await pricing.waitForPaddleFrame();
     await pricing.applyCoupon("INTRO50");
 
     planPrices[title.toLowerCase()] = roundOffPrices(await pricing.getPrices());
@@ -142,11 +142,12 @@ test("apply coupon through url", async () => {
   for (const plan of ["monthly", "yearly"] as const) {
     await app.checkout.goto(plan, "INTRO50");
     const pricing = await app.checkout.getPricing();
+    await pricing.waitForPaddleFrame();
     await pricing.waitForCoupon();
 
     planPrices[plan] = roundOffPrices(await pricing.getPrices());
 
-    await app.goto();
+    await app.goto(true);
   }
 
   for (const key in planPrices) {
@@ -165,6 +166,7 @@ test("apply coupon after changing country", async () => {
     const pricing = await plan.open();
     const title = await pricing.getTitle();
     if (!title) continue;
+    await pricing.waitForPaddleFrame();
     await pricing.changeCountry("IN", 110001);
     await pricing.applyCoupon("INTRO50");
 

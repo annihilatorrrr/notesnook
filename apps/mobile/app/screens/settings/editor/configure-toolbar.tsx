@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -24,14 +24,16 @@ import Animated, { FadeInDown, FadeOutDown } from "react-native-reanimated";
 import { Button } from "../../../components/ui/button";
 import { Notice } from "../../../components/ui/notice";
 import Paragraph from "../../../components/ui/typography/paragraph";
-import { useThemeStore } from "../../../stores/use-theme-store";
+import PremiumService from "../../../services/premium";
+import { useThemeColors } from "@notesnook/theme";
 import { SIZE } from "../../../utils/size";
 import { Group } from "./group";
 import { DragState, useDragState } from "./state";
+import { strings } from "@notesnook/intl";
 export const ConfigureToolbar = () => {
   const data = useDragState((state) => state.data);
   const preset = useDragState((state) => state.preset);
-  const colors = useThemeStore((state) => state.colors);
+  const { colors } = useThemeColors();
 
   const renderGroups = () => {
     return data?.map((item, index) => (
@@ -51,19 +53,16 @@ export const ConfigureToolbar = () => {
             paddingVertical: 12
           }}
         >
-          <Notice
-            text="Curate the toolbar that fits your needs and matches your personality."
-            type="information"
-          />
+          <Notice text={strings.configureToolbarNotice()} type="information" />
 
           <Paragraph
             style={{
               marginTop: 10
             }}
             size={SIZE.xs}
-            color={colors.icon}
+            color={colors.secondary.paragraph}
           >
-            PRESETS
+            {strings.presets()}
           </Paragraph>
 
           <View
@@ -77,25 +76,31 @@ export const ConfigureToolbar = () => {
             {[
               {
                 id: "default",
-                name: "Default"
+                name: strings.default()
               },
               {
                 id: "minimal",
-                name: "Minimal"
+                name: strings.minimal()
               },
               {
                 id: "custom",
-                name: "Custom"
+                name: strings.custom(),
+                pro: true
               }
             ].map((item) => (
               <Button
-                type={preset === item.id ? "accent" : "grayAccent"}
+                type={preset === item.id ? "accent" : "secondaryAccented"}
                 style={{
                   borderRadius: 100,
                   height: 35,
                   marginRight: 10
                 }}
+                proTag={item.pro}
                 onPress={() => {
+                  if (item.id === "custom" && !PremiumService.get()) {
+                    PremiumService.sheet("global");
+                    return;
+                  }
                   useDragState
                     .getState()
                     .setPreset(item.id as DragState["preset"]);
@@ -121,8 +126,8 @@ export const ConfigureToolbar = () => {
             }}
           >
             <Button
-              title="Create a group"
-              type="grayAccent"
+              title={strings.createAGroup()}
+              type="secondaryAccented"
               icon="plus"
               style={{
                 width: "100%"

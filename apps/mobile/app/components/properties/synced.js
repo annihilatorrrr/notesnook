@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,10 +17,10 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+import { useThemeColors } from "@notesnook/theme";
 import React from "react";
-import { View } from "react-native";
+import { View, useWindowDimensions } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
-import { useThemeStore } from "../../stores/use-theme-store";
 import { useUserStore } from "../../stores/use-user-store";
 import { openLinkInBrowser } from "../../utils/functions";
 import { SIZE } from "../../utils/size";
@@ -28,11 +28,14 @@ import { sleep } from "../../utils/time";
 import { Button } from "../ui/button";
 import Heading from "../ui/typography/heading";
 import Paragraph from "../ui/typography/paragraph";
+import { strings } from "@notesnook/intl";
 export const Synced = ({ item, close }) => {
-  const colors = useThemeStore((state) => state.colors);
+  const { colors } = useThemeColors();
   const user = useUserStore((state) => state.user);
   const lastSynced = useUserStore((state) => state.lastSynced);
 
+  const dimensions = useWindowDimensions();
+  const shouldShrink = dimensions.fontScale > 1 && dimensions.width < 450;
   return user && lastSynced >= item.dateModified ? (
     <View
       style={{
@@ -46,10 +49,14 @@ export const Synced = ({ item, close }) => {
         paddingTop: 10,
         marginTop: 10,
         borderTopWidth: 1,
-        borderTopColor: colors.nav
+        borderTopColor: colors.primary.border
       }}
     >
-      <Icon name="shield-key-outline" color={colors.accent} size={SIZE.xxxl} />
+      <Icon
+        name="shield-key-outline"
+        color={colors.primary.accent}
+        size={shouldShrink ? SIZE.xxl : SIZE.xxxl}
+      />
 
       <View
         style={{
@@ -59,23 +66,25 @@ export const Synced = ({ item, close }) => {
         }}
       >
         <Heading
-          color={colors.heading}
+          color={colors.primary.heading}
           size={SIZE.xs}
           style={{
             flexWrap: "wrap"
           }}
         >
-          Encrypted and synced
+          {strings.noteSyncedNoticeHeading()}
         </Heading>
-        <Paragraph
-          style={{
-            flexWrap: "wrap"
-          }}
-          size={SIZE.xs}
-          color={colors.pri}
-        >
-          No one can view this {item.itemType || item.type} except you.
-        </Paragraph>
+        {shouldShrink ? null : (
+          <Paragraph
+            style={{
+              flexWrap: "wrap"
+            }}
+            size={SIZE.xs}
+            color={colors.primary.paragraph}
+          >
+            {strings.noteSyncedNoticeDesc(item.itemType || item.type)}
+          </Paragraph>
+        )}
       </View>
 
       <Button
@@ -84,17 +93,17 @@ export const Synced = ({ item, close }) => {
             close();
             await sleep(300);
             await openLinkInBrowser(
-              "https://docs.notesnook.com/how-is-my-data-encrypted/",
+              "https://help.notesnook.com/how-is-my-data-encrypted",
               colors
             );
           } catch (e) {
             console.error(e);
           }
         }}
-        fontSize={SIZE.xs + 1}
-        title="Learn more"
+        title={strings.learnMore()}
+        fontSize={SIZE.xs}
         height={30}
-        type="transparent"
+        type="secondaryAccented"
       />
     </View>
   ) : null;

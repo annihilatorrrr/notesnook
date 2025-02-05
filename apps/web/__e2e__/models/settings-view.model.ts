@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,34 +17,58 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { Locator, Page } from "@playwright/test";
-import { getTestId } from "../utils";
-import { confirmDialog, fillPasswordDialog, waitToHaveText } from "./utils";
+import { Page } from "@playwright/test";
+import { downloadAndReadFile, getTestId, uploadFile } from "../utils";
+import {
+  confirmDialog,
+  fillConfirmPasswordDialog,
+  fillPasswordDialog,
+  waitForDialog,
+  waitToHaveText
+} from "./utils";
+import { NavigationMenuModel } from "./navigation-menu.model";
 
 export class SettingsViewModel {
   private readonly page: Page;
-  private readonly logoutButton: Locator;
-  private readonly accountStatusContainer: Locator;
-  private readonly backupRecoveryKeyButton: Locator;
+  private readonly navigation: NavigationMenuModel;
+
   constructor(page: Page) {
     this.page = page;
-    this.logoutButton = page.locator(getTestId("settings-logout"));
-    this.accountStatusContainer = page.locator(getTestId("account-status"));
-    this.backupRecoveryKeyButton = page.locator(
-      getTestId("backup-recovery-key")
-    );
+    this.navigation = new NavigationMenuModel(page, "settings-navigation-menu");
+  }
+
+  async close() {
+    await this.page.locator(getTestId("settings-search")).focus();
+    await this.page.waitForTimeout(100);
+    await this.page.keyboard.press("Escape");
+    await this.page.waitForTimeout(1000);
   }
 
   async logout() {
-    await this.logoutButton.click();
-    await confirmDialog(this.page);
+    const item = await this.navigation.findItem("Profile");
+    await item?.click();
+
+    const logoutButton = this.page
+      .locator(getTestId("setting-logout"))
+      .locator("button");
+
+    await logoutButton.click();
+    await confirmDialog(this.page.locator(getTestId("confirm-dialog")));
+
     await this.page
       .locator(getTestId("not-logged-in"))
       .waitFor({ state: "visible" });
   }
 
   async getRecoveryKey(password: string) {
-    await this.backupRecoveryKeyButton.click();
+    const item = await this.navigation.findItem("Profile");
+    await item?.click();
+
+    const backupRecoveryKeyButton = this.page
+      .locator(getTestId("setting-recovery-key"))
+      .locator("button");
+
+    await backupRecoveryKeyButton.click();
     await fillPasswordDialog(this.page, password);
 
     await waitToHaveText(this.page, "recovery-key");
@@ -52,11 +76,107 @@ export class SettingsViewModel {
     const key = await this.page
       .locator(getTestId("recovery-key"))
       .textContent();
-    await confirmDialog(this.page);
+
+    const dialog = this.page.locator(getTestId("recovery-key-dialog"));
+    await confirmDialog(dialog);
     return key;
   }
 
   async isLoggedIn() {
-    return await this.accountStatusContainer.isVisible();
+    const item = await this.navigation.findItem("Subscription details");
+    return !!(await item?.getTitle());
+  }
+
+  async isBackupEncryptionEnabled(state: boolean) {
+    const encyptBackups = this.page
+      .locator(getTestId("setting-encrypt-backups"))
+      .locator(
+        state ? `input[data-checked="true"]` : `input[data-checked="false"]`
+      );
+    await encyptBackups.waitFor({ state: "visible" });
+    return (await encyptBackups.getAttribute("data-checked")) === "true";
+  }
+
+  async toggleBackupEncryption(password?: string) {
+    const item = await this.navigation.findItem("Backup & export");
+    await item?.click();
+
+    const encyptBackups = this.page
+      .locator(getTestId("setting-encrypt-backups"))
+      .locator("label");
+
+    await encyptBackups.click();
+
+    if (password) await fillPasswordDialog(this.page, password);
+  }
+
+  async createBackup(password?: string) {
+    const item = await this.navigation.findItem("Backup & export");
+    await item?.click();
+
+    return await downloadAndReadFile(
+      this.page,
+      async () => {
+        const backupData = this.page
+          .locator(getTestId("setting-create-backup"))
+          .locator("select");
+        await backupData.selectOption({ value: "partial", label: "Backup" });
+        if (password) await fillPasswordDialog(this.page, password);
+      },
+      "utf-8"
+    );
+  }
+
+  async restoreData(filename: string, password?: string) {
+    const item = await this.navigation.findItem("Backup & export");
+    await item?.click();
+
+    const restoreBackup = this.page
+      .locator(getTestId("setting-restore-backup"))
+      .locator("button");
+
+    await uploadFile(this.page, restoreBackup, filename);
+    if (password) await fillPasswordDialog(this.page, password);
+
+    await waitForDialog(this.page, "Restoring backup");
+  }
+
+  async selectImageCompression(option: { value: string; label: string }) {
+    const item = await this.navigation.findItem("Behaviour");
+    await item?.click();
+
+    const imageCompressionDropdown = this.page
+      .locator(getTestId("setting-image-compression"))
+      .locator("select");
+
+    await imageCompressionDropdown.selectOption(option);
+  }
+
+  async enableAppLock(userPassword: string, appLockPassword: string) {
+    const item = await this.navigation.findItem("App lock");
+    await item?.click();
+
+    const appLockSwitch = this.page
+      .locator(getTestId("setting-enable-app-lock"))
+      .locator("label");
+
+    await appLockSwitch.click();
+    await fillPasswordDialog(this.page, userPassword);
+    await this.page.waitForTimeout(100);
+    await fillConfirmPasswordDialog(this.page, appLockPassword);
+    await this.page.waitForTimeout(100);
+  }
+
+  async disableAppLock(appLockPassword: string) {
+    const item = await this.navigation.findItem("App lock");
+    await item?.click();
+
+    const appLockSwitch = this.page
+      .locator(getTestId("setting-enable-app-lock"))
+      .locator("label");
+
+    await appLockSwitch.click();
+    await fillPasswordDialog(this.page, appLockPassword);
+    await this.page.waitForTimeout(100);
   }
 }

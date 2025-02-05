@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -21,58 +21,36 @@ import { memo } from "react";
 import Skeleton from "react-loading-skeleton";
 import { Box, Flex } from "@theme-ui/components";
 import "react-loading-skeleton/dist/skeleton.css";
-import { getRandomArbitrary } from "../../utils/random";
+import { getRandomArbitrary } from "@notesnook/common";
 
-const Lines = [1, 2, 3, 4].map(() => getRandomArbitrary(40, 90));
+const Lines = [1, 2].map(() => getRandomArbitrary(40, 90));
 export const ListLoader = memo(function ListLoader() {
   return (
     <>
-      <Flex
-        sx={{ py: 1, mx: 1, alignItems: "center", justifyContent: "center" }}
-      >
-        <Box sx={{ height: 38 }}>
-          <Skeleton width={38} height={38} circle baseColor="var(--border)" />
-        </Box>
-        <Flex
-          sx={{
-            flex: 1,
-            ml: 1,
-            flexDirection: "column",
-            justifyContent: "center"
-          }}
-        >
-          <Box sx={{ height: 14 }}>
-            <Skeleton inline height={14} baseColor="var(--border)" />
-          </Box>
-          <Box sx={{ mt: 1, height: 10 }}>
-            <Skeleton inline height={10} baseColor="var(--border)" />
-          </Box>
-        </Flex>
-      </Flex>
       {Lines.map((width) => (
         <Box key={width} sx={{ py: 2, px: 1 }}>
           <Skeleton
+            enableAnimation={false}
             height={16}
-            baseColor="var(--border)"
             width={`${width}%`}
             style={{ marginBottom: 5 }}
           />
-          <Skeleton height={12} count={2} baseColor="var(--hover)" />
+          <Skeleton height={12} count={2} />
           <Flex>
-            <Skeleton height={10} inline width={50} baseColor="var(--hover)" />
+            <Skeleton enableAnimation={false} height={10} inline width={50} />
             <Skeleton
+              enableAnimation={false}
               height={10}
               inline
               width={10}
-              baseColor="var(--shade)"
               circle
               style={{ marginLeft: 5 }}
             />
             <Skeleton
+              enableAnimation={false}
               height={10}
               inline
               width={10}
-              baseColor="var(--hover)"
               circle
               style={{ marginLeft: 5 }}
             />

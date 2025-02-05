@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,12 +17,17 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { ToolProps } from "../types";
-import { Editor } from "../../types";
-import { Dropdown } from "../components/dropdown";
-import { MenuItem } from "../../components/menu/types";
-import { ToolbarLocation, useToolbarLocation } from "../stores/toolbar-store";
+import { ToolProps } from "../types.js";
+import { Editor } from "../../types.js";
+import { Dropdown } from "../components/dropdown.js";
+import { MenuItem } from "@notesnook/ui";
+import {
+  ToolbarLocation,
+  useToolbarLocation
+} from "../stores/toolbar-store.js";
 import { useMemo } from "react";
+import { CodeBlock } from "../../extensions/code-block/index.js";
+import { strings } from "@notesnook/intl";
 
 const defaultLevels = [1, 2, 3, 4, 5, 6] as const;
 
@@ -44,10 +49,13 @@ export function Headings(props: ToolProps) {
       id="headings"
       group="headings"
       selectedItem={
-        currentHeadingLevel ? `Heading ${currentHeadingLevel}` : "Paragraph"
+        currentHeadingLevel
+          ? strings.heading(currentHeadingLevel)
+          : strings.paragraph()
       }
       items={items}
       menuWidth={130}
+      disabled={editor.isActive(CodeBlock.name)}
     />
   );
 }
@@ -60,10 +68,11 @@ function toMenuItems(
   const menuItems: MenuItem[] = defaultLevels.map((level) => ({
     type: "button",
     key: `heading-${level}`,
-    title: toolbarLocation === "bottom" ? `H${level}` : `Heading ${level}`,
+    title: toolbarLocation === "bottom" ? `H${level}` : strings.heading(level),
     isChecked: level === currentHeadingLevel,
+    modifier: `Mod-Alt-${level}`,
     onClick: () =>
-      editor.current
+      editor
         ?.chain()
         .focus()
         .updateAttributes("textStyle", { fontSize: null, fontStyle: null })
@@ -73,9 +82,10 @@ function toMenuItems(
   const paragraph: MenuItem = {
     key: "paragraph",
     type: "button",
-    title: "Paragraph",
+    title: strings.paragraph(),
     isChecked: !currentHeadingLevel,
-    onClick: () => editor.current?.chain().focus().setParagraph().run()
+    modifier: `Mod-Alt-0`,
+    onClick: () => editor.chain().focus().setParagraph().run()
   };
   return [paragraph, ...menuItems];
 }

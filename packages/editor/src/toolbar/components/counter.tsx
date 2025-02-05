@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -18,9 +18,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 import React from "react";
-import { Flex } from "@theme-ui/components";
-import { Button } from "../../components/button";
-import { ToolButton } from "./tool-button";
+import { Flex, Text } from "@theme-ui/components";
+import { ToolButton } from "./tool-button.js";
+import { useIsMobile } from "../stores/toolbar-store.js";
+import { strings } from "@notesnook/intl";
 
 export type CounterProps = {
   title: string;
@@ -28,55 +29,75 @@ export type CounterProps = {
   onDecrease: () => void;
   onReset: () => void;
   value: string;
+  disabled?: boolean;
 };
 function _Counter(props: CounterProps) {
-  const { title, onDecrease, onIncrease, onReset, value } = props;
+  const { title, onDecrease, onIncrease, onReset, value, disabled } = props;
+  const isMobile = useIsMobile();
 
   return (
     <Flex
       sx={{
-        alignItems: "center",
-        mr: 1,
-        ":last-of-type": {
-          mr: 0
+        alignItems: "stretch",
+        borderRadius: "default",
+        overflow: "hidden",
+        cursor: disabled ? "not-allowed" : "pointer",
+        height: "100%",
+        ":hover": {
+          bg: isMobile || disabled ? "transparent" : "hover-secondary"
         }
       }}
+      onClick={disabled ? undefined : onReset}
+      title={disabled ? "" : strings.clickToReset(title)}
     >
       <ToolButton
         toggled={false}
-        title={`Decrease ${title}`}
+        title={strings.decrease(title)}
         icon="minus"
         variant={"small"}
-        onClick={onDecrease}
+        disabled={disabled}
+        onClick={
+          disabled
+            ? undefined
+            : (e) => {
+                e.stopPropagation();
+                onDecrease();
+              }
+        }
       />
 
-      <Button
+      <Text
         sx={{
-          color: "text",
-          bg: "transparent",
-          px: 0,
+          color: "paragraph",
           fontSize: "subBody",
+          alignSelf: "center",
           mx: 1,
           textAlign: "center",
-          ":hover": { bg: "transparent" }
+          opacity: disabled ? 0.5 : 1
         }}
-        onClick={onReset}
-        title={`Reset ${title}`}
       >
         {value}
-      </Button>
+      </Text>
 
       <ToolButton
         toggled={false}
-        title={`Increase ${title}`}
+        title={strings.increase(title)}
         icon="plus"
         variant={"small"}
-        onClick={onIncrease}
+        disabled={disabled}
+        onClick={
+          disabled
+            ? undefined
+            : (e) => {
+                e.stopPropagation();
+                onIncrease();
+              }
+        }
       />
     </Flex>
   );
 }
 
 export const Counter = React.memo(_Counter, (prev, next) => {
-  return prev.value === next.value;
+  return prev.value === next.value && prev.disabled === next.disabled;
 });

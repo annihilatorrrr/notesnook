@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -24,8 +24,8 @@ import {
   eSubscribeEvent,
   eUnSubscribeEvent
 } from "../../../services/event-manager";
-import { useThemeStore } from "../../../stores/use-theme-store";
-import { getElevation } from "../../../utils";
+import { useThemeColors } from "@notesnook/theme";
+import { getElevationStyle } from "../../../utils/elevation";
 import { eCloseResultDialog, eOpenResultDialog } from "../../../utils/events";
 import { SIZE } from "../../../utils/size";
 import BaseDialog from "../../dialog/base-dialog";
@@ -36,13 +36,12 @@ import Paragraph from "../../ui/typography/paragraph";
 import { ProFeatures } from "./pro-features";
 
 const ResultDialog = () => {
-  const colors = useThemeStore((state) => state.colors);
+  const { colors } = useThemeColors();
   const [visible, setVisible] = useState(false);
   const [dialogData, setDialogData] = useState({
-    title: "Thank you for signing up!",
-    paragraph:
-      "Try out all features of Notesnook free for 7 days. No limitations. No commitments.",
-    button: "Start taking notes"
+    title: "",
+    paragraph: "",
+    button: ""
   });
   useEffect(() => {
     eSubscribeEvent(eOpenResultDialog, open);
@@ -68,11 +67,11 @@ const ResultDialog = () => {
     <BaseDialog visible={true} onRequestClose={close}>
       <View
         style={{
-          ...getElevation(5),
+          ...getElevationStyle(5),
           width: DDS.isTab ? 350 : "85%",
           maxHeight: 500,
           borderRadius: 10,
-          backgroundColor: colors.bg,
+          backgroundColor: colors.primary.background,
           paddingTop: 20,
           justifyContent: "center",
           alignItems: "center"
@@ -94,7 +93,7 @@ const ResultDialog = () => {
         </Heading>
 
         <Paragraph
-          color={colors.icon}
+          color={colors.secondary.paragraph}
           size={SIZE.md}
           style={{
             alignSelf: "center",
@@ -121,7 +120,7 @@ const ResultDialog = () => {
         <Seperator />
         <View
           style={{
-            backgroundColor: colors.nav,
+            backgroundColor: colors.secondary.background,
             width: "100%",
             borderBottomRightRadius: 10,
             borderBottomLeftRadius: 10,
@@ -135,7 +134,6 @@ const ResultDialog = () => {
               paddingHorizontal: 12
             }}
             onPress={close}
-            height={50}
             fontSize={SIZE.md + 2}
           />
         </View>

@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,15 +17,16 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { Editor, Extension } from "@tiptap/core";
+import { Extension } from "@tiptap/core";
 import { Decoration, DecorationSet } from "prosemirror-view";
 import {
   EditorState,
   Plugin,
   PluginKey,
-  TextSelection,
-  Transaction
+  Transaction,
+  TextSelection
 } from "prosemirror-state";
+import { SearchSettings } from "../../toolbar/stores/search-store.js";
 
 type DispatchFn = (tr: Transaction) => void;
 declare module "@tiptap/core" {
@@ -49,44 +50,43 @@ interface Result {
 
 interface SearchOptions {
   searchResultClass: string;
+  onStartSearch: (term?: string) => boolean;
+  onEndSearch: () => boolean;
 }
 
-interface SearchSettings {
-  matchCase: boolean;
-  enableRegex: boolean;
-  matchWholeWord: boolean;
-}
-
-export type SearchStorage = SearchSettings & {
-  searchTerm: string;
+export type SearchStorage = {
   selectedIndex: number;
-  isSearching: boolean;
   selectedText?: string;
   results?: Result[];
 };
 
 interface TextNodesWithPosition {
   text: string;
-  pos: number;
+  startPos: number;
+  endPos: number;
+  start: number;
+  end: number;
 }
 
 const updateView = (state: EditorState, dispatch: DispatchFn) => {
   if (!state.tr) return;
 
-  state.tr.setMeta("forceUpdate", true);
   dispatch(state.tr);
 };
 
-const regex = (s: string, settings: SearchSettings): RegExp => {
+const regex = (s: string, settings: SearchSettings): RegExp | undefined => {
   const { enableRegex, matchCase, matchWholeWord } = settings;
   const boundary = matchWholeWord ? "\\b" : "";
-  console.log(boundary);
-  return RegExp(
-    boundary +
-      (enableRegex ? s : s.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&")) +
-      boundary,
-    matchCase ? "gu" : "gui"
-  );
+  try {
+    return RegExp(
+      boundary +
+        (enableRegex ? s : s.replace(/[/\\^$*+?.()|[\]]/g, "\\$&")) +
+        boundary,
+      matchCase ? "gum" : "guim"
+    );
+  } catch (e) {
+    console.error(e);
+  }
 };
 
 function searchDocument(
@@ -103,44 +103,63 @@ function searchDocument(
     };
 
   const doc = tr.doc;
-  const decorations: Decoration[] = [];
   const results: Result[] = [];
 
-  let index = 0;
-  let textNodesWithPosition: TextNodesWithPosition[] = [];
+  let index = -1;
+  const textNodesWithPosition: TextNodesWithPosition[] = [];
 
+  let cursor = 0;
   doc?.descendants((node, pos) => {
     if (node.isText) {
       if (textNodesWithPosition[index]) {
-        textNodesWithPosition[index] = {
-          text: textNodesWithPosition[index].text + node.text,
-          pos: textNodesWithPosition[index].pos
-        };
+        textNodesWithPosition[index].text += node.text;
+        textNodesWithPosition[index].end = cursor + (node.text?.length || 0);
       } else {
         textNodesWithPosition[index] = {
           text: node.text || "",
-          pos
+          startPos: pos,
+          endPos: pos + node.nodeSize,
+          start: cursor,
+          end: cursor + (node.text?.length || 0)
         };
       }
-    } else {
-      index += 1;
+      cursor += node.text?.length || 0;
+    } else if (node.isBlock) {
+      const lastNode = textNodesWithPosition[index];
+      if (lastNode) {
+        lastNode.text += "\n";
+        lastNode.end++;
+        lastNode.endPos = pos;
+        cursor++;
+      }
+      index++;
     }
   });
-  textNodesWithPosition = textNodesWithPosition.filter(Boolean);
 
-  for (const { text, pos } of textNodesWithPosition) {
-    const matches = text.matchAll(searchTerm);
+  const text = textNodesWithPosition.map((c) => c.text).join("");
+  for (const match of text.matchAll(searchTerm)) {
+    const start = match.index;
+    const end = match.index + match[0].length;
 
-    for (const m of matches) {
-      if (m[0] === "") break;
+    // Gets all matching nodes that have either the start or end of the
+    // search term in them. This adds support for multi line regex searches.
+    const nodes = textNodesWithPosition.filter((node) => {
+      const nodeStart = node.start;
+      const nodeEnd = node.end;
+      return (
+        (start >= nodeStart && start < nodeEnd) ||
+        (end >= nodeStart && end < nodeEnd)
+      );
+    });
 
-      if (m.index !== undefined) {
-        results.push({
-          from: pos + m.index,
-          to: pos + m.index + m[0].length
-        });
-      }
-    }
+    if (!nodes.length) continue;
+    const endNode = nodes[nodes.length - 1];
+    const startNode = nodes[0];
+    results.push({
+      // reposition our RegExp match index relative to the actual node.
+      from: start + (startNode.startPos - startNode.start),
+      to: end + (endNode.endPos - endNode.end)
+    });
   }
 
   const { from: selectedFrom, to: selectedTo } = tr.selection;
@@ -157,18 +176,29 @@ function searchDocument(
     }
   }
 
+  return {
+    startIndex: selectedIndex || 0,
+    decorationSet: DecorationSet.create(
+      doc,
+      resultsToDecorations(results, searchResultClass, selectedIndex)
+    ),
+    results
+  };
+}
+
+function resultsToDecorations(
+  results: Result[],
+  searchResultClass: string,
+  selectedIndex?: number
+) {
+  const decorations: Decoration[] = [];
   for (let i = 0; i < results.length; i++) {
     const { from, to } = results[i];
     const resultClass =
       i === selectedIndex ? `${searchResultClass} selected` : searchResultClass;
     decorations.push(Decoration.inline(from, to, { class: resultClass }));
   }
-
-  return {
-    startIndex: selectedIndex || 0,
-    decorationSet: DecorationSet.create(doc, decorations),
-    results
-  };
+  return decorations;
 }
 
 const replaceAll = (
@@ -200,7 +230,17 @@ export const SearchReplace = Extension.create<SearchOptions, SearchStorage>({
 
   addOptions() {
     return {
-      searchResultClass: "search-result"
+      searchResultClass: "search-result",
+      onStartSearch: () => false,
+      onEndSearch: () => false
+    };
+  },
+
+  addStorage() {
+    return {
+      selectedIndex: 0,
+      results: [],
+      selectedText: undefined
     };
   },
 
@@ -208,77 +248,93 @@ export const SearchReplace = Extension.create<SearchOptions, SearchStorage>({
     return {
       startSearch:
         () =>
-        ({ state }) => {
-          this.storage.isSearching = true;
-          if (!state.selection.empty) {
-            this.storage.selectedText = state.doc.textBetween(
-              state.selection.$from.pos,
-              state.selection.$to.pos
-            );
-          }
-          return true;
+        ({ state, commands }) => {
+          const term = !state.selection.empty
+            ? state.doc.textBetween(
+                state.selection.$from.pos,
+                state.selection.$to.pos
+              )
+            : undefined;
+          if (term) commands.search(term);
+
+          return this.options.onStartSearch(term);
         },
       endSearch:
         () =>
-        ({ state, dispatch, editor }) => {
-          this.storage.isSearching = false;
-          this.storage.selectedText = undefined;
-          this.storage.searchTerm = "";
-          editor.commands.focus();
+        ({ state, dispatch }) => {
+          this.storage.results = [];
+          this.storage.selectedIndex = 0;
+          state.tr.setMeta("selectedIndex", 0);
+          state.tr.setMeta("isSearching", false);
           if (dispatch) updateView(state, dispatch);
-          return true;
+          return this.options.onEndSearch();
         },
       search:
         (term, options?: SearchSettings) =>
         ({ state, dispatch }) => {
-          this.storage.selectedIndex = 0;
-          this.storage.searchTerm = term;
-          this.storage.enableRegex = options?.enableRegex || false;
-          this.storage.matchCase = options?.matchCase || false;
-          this.storage.matchWholeWord = options?.matchWholeWord || false;
-          this.storage.results = [];
+          state.tr.setMeta("isSearching", true);
+          state.tr.setMeta("searchTerm", term);
+          state.tr.setMeta("enableRegex", options?.enableRegex);
+          state.tr.setMeta("matchCase", options?.matchCase);
+          state.tr.setMeta("matchWholeWord", options?.matchWholeWord);
 
           if (dispatch) updateView(state, dispatch);
           return true;
         },
       moveToNextResult:
         () =>
-        ({ state, dispatch, commands }) => {
+        ({ state, dispatch }) => {
           const { selectedIndex, results } = this.storage;
           if (!results || results.length <= 0) return false;
 
           let nextIndex = selectedIndex + 1;
           if (isNaN(nextIndex) || nextIndex >= results.length) nextIndex = 0;
 
+          const { tr } = state;
           const { from, to } = results[nextIndex];
-          commands.setTextSelection({ from, to });
-          scrollIntoView(this.editor, from);
+          tr.setSelection(
+            TextSelection.create(
+              tr.doc,
+              tr.mapping.map(from),
+              tr.mapping.map(to)
+            )
+          );
+          scrollIntoView();
 
           this.storage.selectedIndex = nextIndex;
+          tr.setMeta("selectedIndex", nextIndex);
           if (dispatch) updateView(state, dispatch);
           return true;
         },
       moveToPreviousResult:
         () =>
-        ({ state, dispatch, commands }) => {
+        ({ state, dispatch }) => {
           const { selectedIndex, results } = this.storage;
           if (!results || results.length <= 0) return false;
 
           let prevIndex = selectedIndex - 1;
           if (isNaN(prevIndex) || prevIndex < 0) prevIndex = results.length - 1;
 
+          const { tr } = state;
           const { from, to } = results[prevIndex];
-          commands.setTextSelection({ from, to });
-          scrollIntoView(this.editor, from);
+          tr.setSelection(
+            TextSelection.create(
+              tr.doc,
+              tr.mapping.map(from),
+              tr.mapping.map(to)
+            )
+          );
+          scrollIntoView();
 
           this.storage.selectedIndex = prevIndex;
+          tr.setMeta("selectedIndex", prevIndex);
           if (dispatch) updateView(state, dispatch);
 
           return true;
         },
       replace:
         (term) =>
-        ({ commands, tr, dispatch }) => {
+        ({ chain, tr, dispatch }) => {
           const { selectedIndex, results } = this.storage;
 
           if (!dispatch || !results || results.length <= 0) return false;
@@ -287,25 +343,7 @@ export const SearchReplace = Extension.create<SearchOptions, SearchStorage>({
           const { from, to } = results[index];
 
           tr.insertText(term, from, to);
-
-          if (index + 1 < results.length) {
-            const { from, to } = results[index + 1];
-            const nextResult = (results[index + 1] = {
-              from: tr.mapping.map(from),
-              to: tr.mapping.map(to)
-            });
-
-            commands.focus();
-            tr.setSelection(
-              new TextSelection(
-                tr.doc.resolve(nextResult.from),
-                tr.doc.resolve(nextResult.to)
-              )
-            );
-          }
-          dispatch(tr);
-          results.splice(index, 1);
-          return true;
+          return chain().moveToNextResult().run();
         },
       replaceAll:
         (term) =>
@@ -331,24 +369,72 @@ export const SearchReplace = Extension.create<SearchOptions, SearchStorage>({
     const key = new PluginKey("searchreplace");
 
     return [
-      new Plugin({
+      new Plugin<
+        SearchSettings & {
+          searchTerm: string;
+          results: DecorationSet;
+          isSearching: boolean;
+          selectedIndex: number;
+        }
+      >({
         key,
         state: {
           init() {
-            return DecorationSet.empty;
+            return {
+              results: DecorationSet.empty,
+              searchTerm: "",
+              isSearching: false,
+              enableRegex: false,
+              matchCase: false,
+              matchWholeWord: false,
+              selectedIndex: 0
+            };
           },
           apply: (tr, value) => {
             const { docChanged } = tr;
-            const forceUpdate = tr.getMeta("forceUpdate");
-            const {
-              searchTerm,
-              enableRegex,
-              matchCase,
-              matchWholeWord,
-              selectedIndex,
-              isSearching
-            } = this.storage;
-            if (docChanged || forceUpdate) {
+            const isSearching = tr.getMeta("isSearching") ?? value.isSearching;
+            if (!isSearching)
+              return {
+                ...value,
+                isSearching: false,
+                results: DecorationSet.empty
+              };
+
+            const searchTerm = tr.getMeta("searchTerm") ?? value.searchTerm;
+            const enableRegex = tr.getMeta("enableRegex") ?? value.enableRegex;
+            const matchCase = tr.getMeta("matchCase") ?? value.matchCase;
+            const matchWholeWord =
+              tr.getMeta("matchWholeWord") ?? value.matchWholeWord;
+            const selectedIndex =
+              tr.getMeta("selectedIndex") ?? value.selectedIndex;
+            const shouldResearch =
+              docChanged ||
+              (isSearching !== value.isSearching && isSearching) ||
+              searchTerm !== value.searchTerm ||
+              matchCase !== value.matchCase ||
+              matchWholeWord !== value.matchWholeWord ||
+              enableRegex !== value.enableRegex;
+
+            if (
+              selectedIndex !== value.selectedIndex &&
+              this.storage.results &&
+              !shouldResearch
+            ) {
+              return {
+                ...value,
+                selectedIndex,
+                results: DecorationSet.create(
+                  tr.doc,
+                  resultsToDecorations(
+                    this.storage.results,
+                    this.options.searchResultClass,
+                    selectedIndex
+                  )
+                )
+              };
+            }
+
+            if (shouldResearch) {
               const { searchResultClass } = this.options;
 
               const searchRegex = searchTerm
@@ -358,21 +444,29 @@ export const SearchReplace = Extension.create<SearchOptions, SearchStorage>({
                 tr,
                 searchResultClass,
                 searchRegex,
-                selectedIndex
+                0 // TODO: first index should be relative to cursor position
               );
               const { decorationSet, results, startIndex } = result;
               this.storage.results = results;
               this.storage.selectedIndex = startIndex;
 
-              return decorationSet;
+              return {
+                selectedIndex,
+                searchTerm,
+                isSearching,
+                results: decorationSet,
+                enableRegex,
+                matchCase,
+                matchWholeWord
+              };
             }
 
-            return isSearching ? value : DecorationSet.empty;
+            return value;
           }
         },
         props: {
           decorations(state) {
-            return key.getState(state);
+            return key.getState(state).results;
           }
         }
       })
@@ -380,13 +474,14 @@ export const SearchReplace = Extension.create<SearchOptions, SearchStorage>({
   }
 });
 
-function scrollIntoView(editor: Editor, from: number) {
-  // const { top } = posToDOMRect(editor.view, from, to);
-  let { node: domNode } = editor.view.domAtPos(from);
-  if (domNode.nodeType === Node.TEXT_NODE && domNode.parentNode)
-    domNode = domNode.parentNode;
+function scrollIntoView() {
+  setTimeout(() => {
+    const domNode = document.querySelector(".search-result.selected");
+    if (!(domNode instanceof HTMLElement)) return;
 
-  if (domNode instanceof HTMLElement) {
-    domNode.scrollIntoView({ behavior: "smooth", block: "nearest" });
-  }
+    domNode.scrollIntoView({
+      behavior: "instant",
+      block: "center"
+    });
+  });
 }

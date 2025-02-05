@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+import { User } from "@notesnook/core";
 import { Platform } from "react-native";
 import { getVersion } from "react-native-device-info";
 import create, { State } from "zustand";
@@ -24,7 +25,6 @@ import { db } from "../common/database";
 import { MMKV } from "../common/database/mmkv";
 import PremiumService from "../services/premium";
 import { SUBSCRIPTION_STATUS } from "../utils/constants";
-import layoutmanager from "../utils/layout-manager";
 export interface MessageStore extends State {
   message: Message;
   setMessage: (message: Message) => void;
@@ -41,6 +41,7 @@ export type Message = {
   onPress: () => void;
   data: object;
   icon: string;
+  type?: string;
 };
 
 export type Action = {
@@ -93,16 +94,11 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
     actionText: null,
     onPress: () => null,
     data: {},
-    icon: "account-outline"
+    icon: "account-outline",
+    type: ""
   },
   setMessage: (message) => {
-    setTimeout(() => {
-      if (get().message.visible || message.visible) {
-        layoutmanager.withAnimation();
-      }
-
-      set({ message: { ...message } });
-    }, 1);
+    set({ message: { ...message } });
   },
   announcements: [],
   remove: async (id) => {
@@ -130,7 +126,6 @@ export const useMessageStore = create<MessageStore>((set, get) => ({
         announcements = [];
       }
     } catch (e) {
-      console.log(e);
       set({ announcements: [] });
     } finally {
       const all = await getFiltered(announcements);

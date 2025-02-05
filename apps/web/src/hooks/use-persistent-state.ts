@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -20,11 +20,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import { useEffect, useState } from "react";
 import config from "../utils/config";
 
-export function usePersistentState<T>(key: string, def: T) {
-  const defState = config.get<T>(key, def);
+export function usePersistentState<T>(key: string | undefined, def: T) {
+  const defState = key ? config.get<T>(key, def) : def;
   const [value, setValue] = useState(defState);
 
   useEffect(() => {
+    if (!key) return;
     config.set<T>(key, value);
   }, [key, value]);
 

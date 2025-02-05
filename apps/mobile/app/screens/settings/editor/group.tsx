@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -24,15 +24,17 @@ import Animated, { Layout } from "react-native-reanimated";
 import { presentDialog } from "../../../components/dialog/functions";
 import { IconButton } from "../../../components/ui/icon-button";
 import Paragraph from "../../../components/ui/typography/paragraph";
-import { useThemeStore } from "../../../stores/use-theme-store";
-import { getElevation } from "../../../utils";
+import { useThemeColors } from "@notesnook/theme";
+import { getElevationStyle } from "../../../utils/elevation";
 import { SIZE } from "../../../utils/size";
 import { renderTool } from "./common";
 import { DraggableItem, useDragState } from "./state";
 import ToolSheet from "./tool-sheet";
 
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
-import { ToolId } from "@notesnook/editor/dist/toolbar/tools";
+import type { ToolId } from "@notesnook/editor";
+import PremiumService from "../../../services/premium";
+import { strings } from "@notesnook/intl";
 
 export const Group = ({
   item,
@@ -57,9 +59,13 @@ export const Group = ({
     height: 0,
     width: 0
   });
-  const colors = useThemeStore((state) => state.colors);
+  const { colors } = useThemeColors();
 
   const onDrop = (data: DraxDragWithReceiverEventData) => {
+    if (!PremiumService.get()) {
+      PremiumService.sheet("global");
+      return;
+    }
     const isDroppedAbove = data.receiver.receiveOffsetRatio.y < 0.5;
     const dragged = data.dragged.payload;
     const reciever = data.receiver.payload;
@@ -120,11 +126,15 @@ export const Group = ({
     {
       name: "minus",
       onPress: () => {
+        if (!PremiumService.get()) {
+          PremiumService.sheet("global");
+          return;
+        }
         presentDialog({
           context: "global",
-          title: "Delete group?",
-          positiveText: "Delete",
-          paragraph: "All tools in the collapsed section will also be removed.",
+          title: strings.deleteGroup(),
+          positiveText: strings.delete(),
+          paragraph: strings.deleteGroupDesc(),
           positivePress: () => {
             if (groupIndex === undefined) return;
             const _data = useDragState.getState().data.slice();
@@ -139,6 +149,10 @@ export const Group = ({
     {
       name: "plus",
       onPress: () => {
+        if (!PremiumService.get()) {
+          PremiumService.sheet("global");
+          return;
+        }
         ToolSheet.present({
           item,
           index: groupIndex
@@ -159,9 +173,9 @@ export const Group = ({
         style={[
           {
             width: isDragged ? dimensions.current?.width : "100%",
-            backgroundColor: colors.bg,
+            backgroundColor: colors.primary.background,
             borderRadius: 10,
-            ...getElevation(hover ? 5 : 0),
+            ...getElevationStyle(hover ? 5 : 0),
             marginTop: isSubgroup ? 0 : 10
           }
         ]}
@@ -182,15 +196,15 @@ export const Group = ({
                 alignItems: "center"
               }}
             >
-              <Icon size={SIZE.md} name="drag" color={colors.icon} />
+              <Icon size={SIZE.md} name="drag" color={colors.primary.icon} />
               <Paragraph
                 style={{
                   marginLeft: 5
                 }}
-                color={colors.icon}
+                color={colors.secondary.paragraph}
                 size={SIZE.xs}
               >
-                GROUP
+                {strings.group()}
               </Paragraph>
             </View>
 
@@ -212,7 +226,7 @@ export const Group = ({
                   }}
                   onPress={item.onPress}
                   name={item.name}
-                  color={colors.icon}
+                  color={colors.primary.icon}
                   size={SIZE.lg}
                 />
               ))}
@@ -272,7 +286,10 @@ export const Group = ({
         receivingStyle={{
           paddingBottom: recievePosition === "below" ? 50 : 0,
           paddingTop: recievePosition === "above" ? 50 : 0,
-          backgroundColor: dragged.type === "subgroup" ? colors.nav : undefined,
+          backgroundColor:
+            dragged.type === "subgroup"
+              ? colors.secondary.background
+              : undefined,
           marginTop: recievePosition === "above" ? 10 : 0,
           marginBottom: recievePosition === "below" ? 10 : 0,
           borderRadius: 10

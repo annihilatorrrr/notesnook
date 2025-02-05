@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,10 +17,8 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+import type { ToolbarGroupDefinition } from "@notesnook/editor";
 import { useEditor } from "./use-editor";
-import type { ToolbarGroupDefinition } from "@notesnook/editor/dist/toolbar/types";
-import { ThemeStore } from "../../../stores/use-theme-store";
-import { NoteType } from "../../../utils/types";
 export type useEditorType = ReturnType<typeof useEditor>;
 
 export type EditorState = {
@@ -35,6 +33,11 @@ export type EditorState = {
   keyboardState: boolean;
   ready: boolean;
   saveCount: 0;
+  isAwaitingResult: boolean;
+  scrollPosition: number;
+  overlay?: boolean;
+  initialLoadCalled?: boolean;
+  editorStateRestored?: boolean;
 };
 
 export type Settings = {
@@ -47,54 +50,49 @@ export type Settings = {
   noHeader?: boolean;
   keyboardShown?: boolean;
   doubleSpacedLines?: boolean;
+  corsProxy: string;
+  fontSize: number;
+  fontFamily: string;
+  dateFormat: string;
+  timeFormat: string;
+  fontScale: number;
+  markdownShortcuts: boolean;
 };
 
 export type EditorProps = {
-  readonly: boolean;
-  noToolbar: boolean;
-  noHeader: boolean;
-  withController: boolean;
+  readonly?: boolean;
+  noToolbar?: boolean;
+  noHeader?: boolean;
+  withController?: boolean;
   editorId?: string;
   onLoad?: () => void;
   onChange?: (html: string) => void;
-  theme?: ThemeStore["colors"];
 };
 
-export type EditorMessage = {
+export type EditorMessage<T> = {
   sessionId: string;
-  value: unknown;
+  value: T;
   type: string;
-};
-
-export type Note = {
-  [name: string]: unknown;
-  id: string | null;
-  type: string;
-  contentId: string;
-  title: string;
-  locked: boolean;
-  conflicted: boolean;
-  dateEdited: number;
-  headline: string;
-};
-
-export type Content = {
-  data?: string;
-  type: string;
+  noteId: string;
+  tabId: string;
+  resolverId?: string;
+  hasTimeout?: boolean;
 };
 
 export type SavePayload = {
   title?: string;
-  id?: string | null;
-  data?: Content["data"];
-  type?: Content["type"];
-  sessionId?: string | null;
+  id?: string;
+  data?: string;
+  type?: "tiptap";
   sessionHistoryId?: number;
+  ignoreEdit: boolean;
+  tabId: string;
+  pendingChanges?: boolean;
 };
 
 export type AppState = {
-  note?: NoteType;
   editing: boolean;
   movedAway: boolean;
   timestamp: number;
+  noteId?: string;
 };

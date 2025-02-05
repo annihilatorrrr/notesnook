@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,49 +17,79 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import localforage from "localforage";
-import { extendPrototype } from "localforage-getitems";
-import * as MemoryDriver from "localforage-driver-memory";
-import { getNNCrypto } from "./nncrypto.stub";
-import type { Cipher, SerializedKey } from "@notesnook/crypto/dist/src/types";
-
-localforage.defineDriver(MemoryDriver);
-extendPrototype(localforage);
+import { IStorage } from "@notesnook/core";
+import {
+  IndexedDBKVStore,
+  LocalStorageKVStore,
+  MemoryKVStore,
+  IKVStore
+} from "./key-value";
+import { NNCrypto } from "./nncrypto";
+import type { Cipher, SerializedKey } from "@notesnook/crypto";
+import { isFeatureSupported } from "../utils/feature-check";
+import { IKeyStore } from "./key-store";
+import { User } from "@notesnook/core";
 
 type EncryptedKey = { iv: Uint8Array; cipher: BufferSource };
 export type DatabasePersistence = "memory" | "db";
 
 const APP_SALT = "oVzKtazBo7d8sb7TBvY9jw";
 
-export class NNStorage {
-  database: LocalForage;
-  constructor(name: string, persistence: DatabasePersistence = "db") {
-    const drivers =
+export class NNStorage implements IStorage {
+  database: IKVStore;
+
+  constructor(
+    name: string,
+    private readonly keyStore: () => IKeyStore | null = () => null,
+    persistence: DatabasePersistence = "db"
+  ) {
+    this.database =
       persistence === "memory"
-        ? [MemoryDriver._driver]
-        : [localforage.INDEXEDDB, localforage.WEBSQL, localforage.LOCALSTORAGE];
-    this.database = localforage.createInstance({
-      name,
-      driver: drivers
-    });
+        ? new MemoryKVStore()
+        : isFeatureSupported("indexedDB")
+        ? new IndexedDBKVStore(name, "keyvaluepairs")
+        : new LocalStorageKVStore();
   }
 
-  read<T>(key: string): Promise<T | null> {
-    if (!key) return Promise.resolve(null);
-    return this.database.getItem(key);
+  async migrate() {
+    if (!this.keyStore) return;
+    const user = await this.read<User>("user");
+    if (!user) return;
+
+    const key = await this._getCryptoKey(`_uk_@${user.email}`);
+    if (!key) return;
+
+    await this.database.deleteMany([
+      `_uk_@${user.email}`,
+      `_uk_@${user.email}@_k`
+    ]);
+    await this.keyStore()?.setValue("userEncryptionKey", key);
   }
 
-  readMulti(keys: string[]) {
-    if (keys.length <= 0) return [];
-    return this.database.getItems(keys.sort());
+  read<T>(key: string): Promise<T | undefined> {
+    if (!key) return Promise.resolve(undefined);
+    return this.database.get(key);
+  }
+
+  readMulti<T>(keys: string[]): Promise<[string, T][]> {
+    if (keys.length <= 0) return Promise.resolve([]);
+    return this.database.getMany(keys.sort());
+  }
+
+  writeMulti<T>(entries: [string, T][]) {
+    return this.database.setMany(entries);
   }
 
   write<T>(key: string, data: T) {
-    return this.database.setItem(key, data);
+    return this.database.set(key, data);
   }
 
   remove(key: string) {
-    return this.database.removeItem(key);
+    return this.database.delete(key);
+  }
+
+  removeMulti(keys: string[]) {
+    return this.database.deleteMany(keys);
   }
 
   clear() {
@@ -70,27 +100,67 @@ export class NNStorage {
     return this.database.keys();
   }
 
-  async deriveCryptoKey(name: string, credentials: SerializedKey) {
+  async deriveCryptoKey(credentials: SerializedKey) {
+    if (!this.keyStore) throw new Error("No key store found!");
+
     const { password, salt } = credentials;
     if (!password) throw new Error("Invalid data provided to deriveCryptoKey.");
 
-    const crypto = await getNNCrypto();
-    const keyData = await crypto.exportKey(password, salt);
+    const keyData = await NNCrypto.exportKey(password, salt);
+    if (!keyData.key) throw new Error("Invalid key.");
 
-    if (this.isIndexedDBSupported() && window?.crypto?.subtle && keyData.key) {
-      const pbkdfKey = await derivePBKDF2Key(password);
-      await this.write(name, pbkdfKey);
-      const cipheredKey = await aesEncrypt(pbkdfKey, keyData.key);
-      await this.write(`${name}@_k`, cipheredKey);
-    } else if (keyData.key) {
-      await this.write(`${name}@_k`, keyData.key);
-    } else {
-      throw new Error(`Invalid key.`);
-    }
+    await this.keyStore()?.setValue("userEncryptionKey", keyData.key);
   }
 
-  async getCryptoKey(name: string): Promise<string | undefined> {
-    if (this.isIndexedDBSupported() && window?.crypto?.subtle) {
+  async getCryptoKey(): Promise<string | undefined> {
+    if (!this.keyStore) throw new Error("No key store found!");
+
+    return this.keyStore()?.getValue("userEncryptionKey");
+  }
+
+  async generateCryptoKey(
+    password: string,
+    salt?: string
+  ): Promise<SerializedKey> {
+    if (!password)
+      throw new Error("Invalid data provided to generateCryptoKey.");
+
+    return await NNCrypto.exportKey(password, salt);
+  }
+
+  async hash(password: string, email: string): Promise<string> {
+    return await NNCrypto.hash(password, `${APP_SALT}${email}`);
+  }
+
+  encrypt(key: SerializedKey, plainText: string): Promise<Cipher<"base64">> {
+    return NNCrypto.encrypt(key, plainText, "text", "base64");
+  }
+
+  encryptMulti(
+    key: SerializedKey,
+    items: string[]
+  ): Promise<Cipher<"base64">[]> {
+    return NNCrypto.encryptMulti(key, items, "text", "base64");
+  }
+
+  decrypt(key: SerializedKey, cipherData: Cipher<"base64">): Promise<string> {
+    cipherData.format = "base64";
+    return NNCrypto.decrypt(key, cipherData, "text");
+  }
+
+  decryptMulti(
+    key: SerializedKey,
+    items: Cipher<"base64">[]
+  ): Promise<string[]> {
+    items.forEach((c) => (c.format = "base64"));
+    return NNCrypto.decryptMulti(key, items, "text");
+  }
+
+  /**
+   * @deprecated
+   */
+  private async _getCryptoKey(name: string) {
+    if (isFeatureSupported("indexedDB") && window?.crypto?.subtle) {
       const pbkdfKey = await this.read<CryptoKey>(name);
       const cipheredKey = await this.read<EncryptedKey | string>(`${name}@_k`);
       if (typeof cipheredKey === "string") return cipheredKey;
@@ -103,93 +173,19 @@ export class NNStorage {
     }
   }
 
-  isIndexedDBSupported(): boolean {
-    return this.database.driver() === "asyncStorage";
-  }
-
-  async generateCryptoKey(
+  // noop
+  generateCryptoKeyFallback(
     password: string,
     salt?: string
   ): Promise<SerializedKey> {
-    if (!password)
-      throw new Error("Invalid data provided to generateCryptoKey.");
-    const crypto = await getNNCrypto();
-    return await crypto.exportKey(password, salt);
+    return this.generateCryptoKey(password, salt);
   }
 
-  async hash(password: string, email: string): Promise<string> {
-    const crypto = await getNNCrypto();
-    return await crypto.hash(password, `${APP_SALT}${email}`);
-  }
-
-  async encrypt(key: SerializedKey, plainText: string): Promise<Cipher> {
-    const crypto = await getNNCrypto();
-    return await crypto.encrypt(
-      key,
-      { format: "text", data: plainText },
-      "base64"
-    );
-  }
-
-  async decrypt(
-    key: SerializedKey,
-    cipherData: Cipher
-  ): Promise<string | undefined> {
-    const crypto = await getNNCrypto();
-    cipherData.format = "base64";
-    const result = await crypto.decrypt(key, cipherData);
-    if (typeof result.data === "string") return result.data;
-  }
+  // noop
+  async deriveCryptoKeyFallback(): Promise<void> {}
 }
 
-const enc = new TextEncoder();
 const dec = new TextDecoder();
-
-async function derivePBKDF2Key(password: string): Promise<CryptoKey> {
-  const key = await window.crypto.subtle.importKey(
-    "raw",
-    enc.encode(password),
-    "PBKDF2",
-    false,
-    ["deriveKey"]
-  );
-
-  const salt = window.crypto.getRandomValues(new Uint8Array(16));
-  return await window.crypto.subtle.deriveKey(
-    {
-      name: "PBKDF2",
-      salt,
-      iterations: 100000,
-      hash: "SHA-256"
-    },
-    key,
-    { name: "AES-GCM", length: 256 },
-    true,
-    ["encrypt", "decrypt"]
-  );
-}
-
-async function aesEncrypt(
-  cryptoKey: CryptoKey,
-  data: string
-): Promise<EncryptedKey> {
-  const iv = window.crypto.getRandomValues(new Uint8Array(12));
-
-  const cipher = await window.crypto.subtle.encrypt(
-    {
-      name: "AES-GCM",
-      iv: iv
-    },
-    cryptoKey,
-    enc.encode(data)
-  );
-
-  return {
-    iv,
-    cipher
-  };
-}
-
 async function aesDecrypt(
   cryptoKey: CryptoKey,
   data: EncryptedKey

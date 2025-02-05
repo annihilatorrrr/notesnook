@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -21,11 +21,9 @@ import { eSendEvent } from "../../services/event-manager";
 import {
   eCloseActionSheet,
   eCloseAddNotebookDialog,
-  eCloseAddTopicDialog,
   eCloseMoveNoteDialog,
   eOpenActionSheet,
   eOpenAddNotebookDialog,
-  eOpenAddTopicDialog,
   eOpenMoveNoteDialog
 } from "../../utils/events";
 
@@ -51,10 +49,4 @@ export const AddNotebookEvent = (notebook) => {
 };
 export const HideAddNotebookEvent = (notebook) => {
   eSendEvent(eCloseAddNotebookDialog, notebook);
-};
-export const AddTopicEvent = (topic) => {
-  eSendEvent(eOpenAddTopicDialog, topic);
-};
-export const HideAddTopicEvent = (notebook) => {
-  eSendEvent(eCloseAddTopicDialog, notebook);
 };

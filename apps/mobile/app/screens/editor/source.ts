@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -28,5 +28,5 @@ const EditorMobileSourceUrl =
  * The url should be something like this: http://192.168.100.126:3000/index.html
  */
 export const EDITOR_URI = __DEV__
-  ? "http://192.168.10.3:3000/index.html"
+  ? EditorMobileSourceUrl
   : EditorMobileSourceUrl;

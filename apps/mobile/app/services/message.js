@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,25 +17,25 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+import React from "react";
+import { Platform } from "react-native";
+import { verifyUser } from "../screens/settings/functions";
 import { useMessageStore } from "../stores/use-message-store";
 import {
   eOpenLoginDialog,
   eOpenRateDialog,
   eOpenRecoveryKeyDialog
 } from "../utils/events";
-import { eSendEvent } from "./event-manager";
+import { eSendEvent, presentSheet } from "./event-manager";
 import PremiumService from "./premium";
-import { verifyUser } from "../screens/settings/functions";
-import { Platform } from "react-native";
-import umami from "../common/analytics";
 import SettingsService from "./settings";
+import { Update } from "../components/sheets/update";
+import { strings } from "@notesnook/intl";
 
 const rateAppMessage = {
   visible: true,
-  message: "We would love to know what you think",
-  actionText:
-    "Rate Notesnook on " +
-    `${Platform.OS === "ios" ? "App store" : "Play store"}`,
+  message: strings.rateAppMessage(),
+  actionText: strings.rateAppActionText(Platform.OS),
   onPress: () => {
     eSendEvent(eOpenRateDialog);
   },
@@ -50,22 +50,22 @@ export function setRateAppMessage() {
 
 const recoveryKeyMessage = {
   visible: true,
-  message: "Keep your data safe if you lose password",
-  actionText: "Save your account recovery key",
+  message: strings.recoveryKeyMessage(),
+  actionText: strings.recoveryKeyMessageActionText(),
   onPress: () => {
     verifyUser(
       null,
       () => {
         eSendEvent(eOpenRecoveryKeyDialog);
       },
-      true,
+      false,
       async () => {
         SettingsService.set({
           recoveryKeySaved: true
         });
         clearMessage();
       },
-      "I have saved my key already"
+      "Cancel"
     );
   },
   data: {},
@@ -79,10 +79,9 @@ export function setRecoveryKeyMessage() {
 
 const loginMessage = {
   visible: true,
-  message: "You are not logged in",
-  actionText: "Login to encrypt and sync notes",
+  message: strings.loginMessage(),
+  actionText: strings.loginMessageActionText(),
   onPress: () => {
-    umami.pageView("/signup", "/welcome/home");
     eSendEvent(eOpenLoginDialog);
   },
   data: {},
@@ -96,8 +95,8 @@ export function setLoginMessage() {
 
 const emailMessage = {
   visible: true,
-  message: "Email not confirmed",
-  actionText: "Please confirm your email to sync notes.",
+  message: strings.syncDisabled(),
+  actionText: strings.syncDisabledActionText(),
   onPress: () => {
     PremiumService.showVerifyEmailDialog();
   },
@@ -121,4 +120,38 @@ const noMessage = {
 
 export function clearMessage() {
   useMessageStore.getState().setMessage(noMessage);
+}
+
+const autoBackupsOff = {
+  visible: true,
+  message: strings.autoBackupsOffMessage(),
+  actionText: strings.autoBackupsOffActionText(),
+  onPress: () => {
+    clearMessage();
+  },
+  data: {},
+  icon: "backup-restore",
+  type: "error"
+};
+
+export function setAutobackOffMessage() {
+  useMessageStore.getState().setMessage(autoBackupsOff);
+}
+
+const updateAvailableMessage = (version) => ({
+  visible: true,
+  message: strings.newUpdateMessage(),
+  actionText: strings.newUpdateActionText(),
+  onPress: () => {
+    presentSheet({
+      component: (ref) => <Update version={version} fwdRef={ref} />
+    });
+  },
+  data: {},
+  icon: "update",
+  type: "normal"
+});
+
+export function setUpdateAvailableMessage(version) {
+  useMessageStore.getState().setMessage(updateAvailableMessage(version));
 }

@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,7 +17,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { Editor } from "../../types";
+import { Editor } from "../../types.js";
 import { Node as PMNode, Attrs } from "prosemirror-model";
 
 export interface ReactNodeProps {
@@ -30,7 +30,11 @@ export type ForwardRef = (node: HTMLElement | null) => void;
 export type ShouldUpdate = (prevNode: PMNode, nextNode: PMNode) => boolean;
 export type UpdateAttributes<T> = (
   attributes: Partial<T>,
-  options?: { addToHistory?: boolean; preventUpdate?: boolean }
+  options?: {
+    addToHistory?: boolean;
+    preventUpdate?: boolean;
+    forceUpdate?: boolean;
+  }
 ) => void;
 export type ContentDOM =
   | {
@@ -40,22 +44,21 @@ export type ContentDOM =
   | undefined;
 
 export type ReactNodeViewProps<TAttributes = Attrs> = {
+  pos: number | undefined;
   getPos: GetPosNode;
   node: NodeWithAttrs<TAttributes>;
   editor: Editor;
   updateAttributes: UpdateAttributes<TAttributes>;
   forwardRef?: ForwardRef;
+  selected: boolean;
 };
-
-export type SelectionBasedReactNodeViewProps<TAttributes = Attrs> =
-  ReactNodeViewProps<TAttributes> & {
-    selected: boolean;
-  };
 
 export type ReactNodeViewOptions<P> = {
   props?: P;
   component?: React.ComponentType<P>;
+  componentKey?: (node: PMNode) => string;
   shouldUpdate?: ShouldUpdate;
-  contentDOMFactory?: (() => ContentDOM) | boolean;
+  contentDOMFactory?: ((node: PMNode) => ContentDOM) | boolean;
   wrapperFactory?: () => HTMLElement;
+  forceEnableSelection?: boolean;
 };

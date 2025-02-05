@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -25,7 +25,7 @@ test("delete the last note of a color", async ({ page }) => {
   await app.goto();
   const notes = await app.goToNotes();
   const note = await notes.createNote(NOTE);
-  await note?.contextMenu.color("red");
+  await note?.contextMenu.newColor({ title: "red", color: "#ff0000" });
   await app.navigation.findItem("red");
 
   await note?.contextMenu.moveToTrash();
@@ -34,15 +34,45 @@ test("delete the last note of a color", async ({ page }) => {
   expect(await app.getRouteHeader()).toBe("Trash");
 });
 
+test("remove color", async ({ page }) => {
+  const app = new AppModel(page);
+  await app.goto();
+  const notes = await app.goToNotes();
+  const note = await notes.createNote(NOTE);
+  await note?.contextMenu.newColor({ title: "red", color: "#ff0000" });
+  const colorItem = await app.navigation.findItem("red");
+
+  await colorItem?.removeColor();
+
+  expect(await app.navigation.findItem("red")).toBeUndefined();
+  expect(await note?.contextMenu.isColored("red")).toBe(false);
+});
+
 test("rename color", async ({ page }) => {
   const app = new AppModel(page);
   await app.goto();
   const notes = await app.goToNotes();
   const note = await notes.createNote(NOTE);
-  await note?.contextMenu.color("red");
+  await note?.contextMenu.newColor({ title: "red", color: "#ff0000" });
   const colorItem = await app.navigation.findItem("red");
 
   await colorItem?.renameColor("priority-33");
 
-  expect(await app.navigation.findItem("priority-33"));
+  expect(await app.navigation.findItem("priority-33")).toBeDefined();
+});
+
+test("creating a color shouldn't be possible on basic plan", async ({
+  page
+}) => {
+  await page.exposeBinding("isBasic", () => true);
+  const app = new AppModel(page);
+  await app.goto();
+  const notes = await app.goToNotes();
+  const note = await notes.createNote(NOTE);
+
+  await note?.contextMenu.newColor({ title: "red", color: "#ff0000" });
+
+  expect(
+    await app.toasts.waitForToast("Upgrade to Notesnook Pro to add colors.")
+  ).toBe(true);
 });

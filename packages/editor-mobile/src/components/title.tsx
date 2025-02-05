@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,66 +17,158 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import React from "react";
-import { RefObject, useEffect, useRef } from "react";
+import { getFontById, replaceDateTime } from "@notesnook/editor";
+import React, { RefObject, useCallback, useEffect, useRef } from "react";
 import { EditorController } from "../hooks/useEditorController";
+import { useTabContext } from "../hooks/useTabStore";
 import styles from "./styles.module.css";
 function Title({
   controller,
   title,
   titlePlaceholder,
-  readonly
+  readonly,
+  fontFamily,
+  dateFormat,
+  timeFormat,
+  loading
 }: {
   controller: RefObject<EditorController>;
   title: string;
   titlePlaceholder: string;
   readonly: boolean;
+  fontFamily: string;
+  dateFormat: string;
+  timeFormat: string;
+  loading?: boolean;
 }) {
-  const titleRef = useRef<HTMLInputElement>(null);
-  const emitUpdate = useRef(true);
-  global.editorTitle = titleRef;
+  const tab = useTabContext();
+  const titleRef = useRef<HTMLTextAreaElement>(null);
+  const titleSizeDiv = useRef<HTMLDivElement>(null);
+
+  const resizeTextarea = useCallback(() => {
+    if (!titleSizeDiv.current || !titleRef.current) return;
+    titleSizeDiv.current.innerText = titleRef.current.value;
+    titleRef.current.style.height = `${titleSizeDiv.current.clientHeight}px`;
+    titleSizeDiv.current.style.width = `${titleRef.current.clientWidth}px`;
+  }, []);
 
   useEffect(() => {
     if (titleRef.current) {
-      emitUpdate.current = false;
       titleRef.current.value = title;
-      emitUpdate.current = true;
+      resizeTextarea();
     }
-  }, [title]);
 
-  return (
-    <input
-      ref={titleRef}
-      className={styles.titleBar}
-      contentEditable={!readonly}
-      disabled={readonly}
-      style={{
-        height: 50,
-        fontSize: 25,
-        width: "100%",
-        boxSizing: "border-box",
-        borderWidth: 0,
-        paddingRight: 12,
-        paddingLeft: 12,
-        fontWeight: 600,
-        fontFamily: "Open Sans",
-        backgroundColor: "transparent",
-        color: "var(--nn_heading)",
-        caretColor: "var(--nn_accent)"
-      }}
-      maxLength={150}
-      onChange={(event) => {
-        if (!emitUpdate.current) return;
-        controller.current?.titleChange(event.target.value);
-      }}
-      placeholder={titlePlaceholder}
-    />
+    window.addEventListener("resize", resizeTextarea);
+    return () => {
+      window.removeEventListener("resize", resizeTextarea);
+    };
+  }, [resizeTextarea, title]);
+
+  useEffect(() => {
+    globalThis.editorTitles[tab.id] = titleRef;
+    return () => {
+      globalThis.editorTitles[tab.id] = undefined;
+    };
+  }, [tab.id, titleRef]);
+
+  useEffect(() => {
+    if (!loading) {
+      setTimeout(() => {
+        resizeTextarea();
+      }, 300);
+    }
+  }, [loading, resizeTextarea]);
+
+  return loading ? null : (
+    <>
+      <div
+        ref={titleSizeDiv}
+        style={{
+          width: "100%",
+          maxWidth: "100%",
+          minHeight: 40,
+          opacity: 0,
+          paddingRight: 10,
+          paddingLeft: 10,
+          fontWeight: 600,
+          fontFamily: getFontById(fontFamily)?.font || "Open Sans",
+          boxSizing: "border-box",
+          fontSize: 25,
+          zIndex: -1,
+          position: "absolute",
+          userSelect: "none",
+          WebkitUserSelect: "none",
+          pointerEvents: "none",
+          overflowWrap: "anywhere",
+          paddingTop: 3,
+          whiteSpace: "break-spaces"
+        }}
+      />
+      <textarea
+        ref={titleRef}
+        className={styles.titleBar}
+        rows={1}
+        contentEditable={!readonly}
+        disabled={readonly}
+        defaultValue={title}
+        style={{
+          height: 40,
+          minHeight: 40,
+          fontSize: 25,
+          width: "100%",
+          boxSizing: "border-box",
+          border: 0,
+          opacity: 1,
+          paddingRight: 10,
+          paddingLeft: 10,
+          fontWeight: 600,
+          fontFamily: getFontById(fontFamily)?.font || "Open Sans",
+          backgroundColor: "transparent",
+          color: "var(--nn_primary_heading)",
+          caretColor: "var(--nn_primary_accent)",
+          borderRadius: 0,
+          overflow: "hidden",
+          overflowX: "hidden",
+          overflowY: "hidden"
+        }}
+        maxLength={1000}
+        onInput={(event) => {
+          resizeTextarea();
+          (event.target as HTMLTextAreaElement).value = replaceDateTime(
+            (event.target as HTMLTextAreaElement).value,
+            dateFormat,
+            timeFormat as "12-hour" | "24-hour"
+          );
+          controller.current?.titleChange(
+            (event.target as HTMLTextAreaElement).value
+          );
+        }}
+        onKeyDown={(e) => {
+          const editor = editors[tab.id];
+          if (e.key === "Enter") {
+            e.preventDefault();
+            e.stopPropagation();
+            editor?.commands.focus();
+          }
+        }}
+        onPaste={() => {
+          resizeTextarea();
+        }}
+        placeholder={titlePlaceholder}
+      />
+    </>
   );
 }
 
 export default React.memo(Title, (prev, next) => {
-  if (prev.title !== next.title) return false;
-  if (prev.titlePlaceholder !== next.titlePlaceholder) return false;
-  if (prev.readonly !== next.readonly) return false;
+  if (
+    prev.title !== next.title ||
+    prev.titlePlaceholder !== next.titlePlaceholder ||
+    prev.readonly !== next.readonly ||
+    prev.fontFamily !== next.fontFamily ||
+    prev.loading !== next.loading
+  )
+    return false;
+
   return true;
 });

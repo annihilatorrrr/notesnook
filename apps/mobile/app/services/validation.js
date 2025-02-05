@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,6 +17,7 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+import { strings } from "@notesnook/intl";
 import isEmail from "validator/lib/isEmail";
 
 export function validateEmail(email) {
@@ -28,7 +29,7 @@ export function validateEmail(email) {
 }
 
 export const ERRORS_LIST = {
-  SHORT_PASS: "Atleast 8 characters"
+  SHORT_PASS: strings.passTooShort()
 };
 
 export function validatePass(password) {
@@ -36,14 +37,12 @@ export function validatePass(password) {
     SHORT_PASS: false
   };
 
-  if (password?.length <= 0) {
+  if (password?.length < 8) {
     errors.SHORT_PASS = true;
-    return errors;
-  }
-
-  if (password.length >= 8) {
+  } else {
     errors.SHORT_PASS = false;
   }
+
   return errors;
 }
 

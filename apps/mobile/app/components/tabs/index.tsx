@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -22,6 +22,7 @@ import React, {
   RefObject,
   useEffect,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState
 } from "react";
@@ -36,14 +37,16 @@ import Animated, {
   WithSpringConfig,
   withTiming
 } from "react-native-reanimated";
-import { editorState } from "../../screens/editor/tiptap/utils";
+import { getAppState } from "../../screens/editor/tiptap/utils";
 import { eSendEvent } from "../../services/event-manager";
 import { useSettingStore } from "../../stores/use-setting-store";
 import { eClearEditor } from "../../utils/events";
+import { useSideBarDraggingStore } from "../side-menu/dragging-store";
+import { useTabStore } from "../../screens/editor/tiptap/use-tab-store";
 
 interface TabProps extends ViewProps {
   dimensions: { width: number; height: number };
-  widths: { a: number; b: number; c: number };
+  widths: { sidebar: number; list: number; editor: number };
   onChangeTab: (data: { i: number; from: number }) => void;
   onScroll: (offset: number) => void;
   enabled: boolean;
@@ -51,13 +54,13 @@ interface TabProps extends ViewProps {
 }
 
 export interface TabsRef {
-  goToPage: (page: number, animated?:boolean) => void;
-  goToIndex: (index: number) => 0 | undefined;
+  goToPage: (page: number, animated?: boolean) => void;
+  goToIndex: (index: number, animated?: boolean) => 0 | undefined;
   unlock: () => boolean;
   lock: () => boolean;
-  openDrawer: () => void;
-  closeDrawer: () => void;
-  page: number;
+  openDrawer: (animated?: boolean) => void;
+  closeDrawer: (animated?: boolean) => void;
+  page: () => number;
   setScrollEnabled: () => true;
   isDrawerOpen: () => boolean;
   node: RefObject<Animated.View>;
@@ -75,12 +78,21 @@ export const FluidTabs = forwardRef<TabsRef, TabProps>(function FluidTabs(
   }: TabProps,
   ref
 ) {
+  const appState = useMemo(() => getAppState(), []);
   const deviceMode = useSettingStore((state) => state.deviceMode);
   const fullscreen = useSettingStore((state) => state.fullscreen);
   const introCompleted = useSettingStore(
     (state) => state.settings.introCompleted
   );
-  const translateX = useSharedValue(widths ? widths.a : 0);
+  const translateX = useSharedValue(
+    widths
+      ? appState &&
+        appState?.movedAway === false &&
+        useTabStore.getState().getCurrentNoteId()
+        ? widths.sidebar + widths.list
+        : widths.sidebar
+      : 0
+  );
   const startX = useSharedValue(0);
   const currentTab = useSharedValue(1);
   const previousTab = useSharedValue(1);
@@ -94,12 +106,12 @@ export const FluidTabs = forwardRef<TabsRef, TabProps>(function FluidTabs(
   const [disabled, setDisabled] = useState(false);
   const node = useRef<Animated.View>(null);
   const containerWidth = widths
-    ? widths.a + widths.b + widths.c
+    ? widths.sidebar + widths.list + widths.editor
     : dimensions.width;
 
   const drawerPosition = 0;
-  const homePosition = widths.a;
-  const editorPosition = widths.a + widths.b;
+  const homePosition = widths.sidebar;
+  const editorPosition = widths.sidebar + widths.list;
   const isSmallTab = deviceMode === "smallTablet";
   const isLoaded = useRef(false);
   const prevWidths = useRef(widths);
@@ -110,10 +122,14 @@ export const FluidTabs = forwardRef<TabsRef, TabProps>(function FluidTabs(
       if (deviceMode === "tablet" || fullscreen) {
         translateX.value = 0;
       } else {
-        if (prevWidths.current?.a !== widths.a) {
-          translateX.value = editorState().movedAway
-            ? widths.a
-            : editorPosition;
+        if (prevWidths.current?.sidebar !== widths.sidebar) {
+          translateX.value =
+            appState && appState?.movedAway === false
+              ? editorPosition
+              : widths.sidebar;
+          if (translateX.value === editorPosition) {
+            onChangeTab?.({ i: 2, from: 1 });
+          }
         }
       }
       isLoaded.current = true;
@@ -141,7 +157,8 @@ export const FluidTabs = forwardRef<TabsRef, TabProps>(function FluidTabs(
     isDrawerOpen,
     homePosition,
     onDrawerStateChange,
-    editorPosition
+    editorPosition,
+    appState
   ]);
 
   useImperativeHandle(
@@ -149,7 +166,7 @@ export const FluidTabs = forwardRef<TabsRef, TabProps>(function FluidTabs(
     (): TabsRef => ({
       goToPage: (page: number, animated = true) => {
         if (deviceMode === "tablet") {
-          translateX.value = withTiming(0);
+          translateX.value = animated ? withTiming(0) : 0;
           return;
         }
         page = page + 1;
@@ -167,20 +184,22 @@ export const FluidTabs = forwardRef<TabsRef, TabProps>(function FluidTabs(
           currentTab.value = 2;
         }
       },
-      goToIndex: (index: number) => {
+      goToIndex: (index: number, animated = true) => {
         if (deviceMode === "tablet") {
-          translateX.value = withTiming(0);
+          translateX.value = animated ? withTiming(0) : 0;
           return;
         }
         if (index === 0) {
           onDrawerStateChange(true);
-          return (translateX.value = withSpring(0));
+          return (translateX.value = animated ? withSpring(0) : 0);
         }
         if (index === 1) {
-          translateX.value = withTiming(homePosition);
+          translateX.value = animated ? withTiming(homePosition) : homePosition;
           currentTab.value = 1;
         } else if (index === 2) {
-          translateX.value = withTiming(editorPosition);
+          translateX.value = animated
+            ? withTiming(editorPosition)
+            : editorPosition;
           currentTab.value = 2;
         }
       },
@@ -193,23 +212,37 @@ export const FluidTabs = forwardRef<TabsRef, TabProps>(function FluidTabs(
         return true;
       },
       isDrawerOpen: () => isDrawerOpen.value,
-      openDrawer: () => {
-        translateX.value = withSpring(drawerPosition, {
-          mass: 0.5
-        });
+      openDrawer: (animated = true) => {
+        if (deviceMode === "tablet") {
+          translateX.value = animated ? withTiming(0) : 0;
+          return;
+        }
+        translateX.value = animated
+          ? withSpring(drawerPosition, {
+              mass: 0.5
+            })
+          : drawerPosition;
         isDrawerOpen.value = true;
         onDrawerStateChange(true);
       },
-      closeDrawer: () => {
+      closeDrawer: (animated = true) => {
+        if (forcedLock.value) return;
         if (deviceMode === "tablet") {
-          translateX.value = withTiming(0);
+          translateX.value = animated ? withTiming(0) : 0;
           return;
         }
-        translateX.value = withTiming(homePosition);
+        translateX.value = animated ? withTiming(homePosition) : homePosition;
+        if (!animated) {
+          translateX.value = 299;
+          translateX.value = 300;
+        }
+        useSideBarDraggingStore.setState({
+          dragging: false
+        });
         onDrawerStateChange(false);
         isDrawerOpen.value = false;
       },
-      page: currentTab.value,
+      page: () => currentTab.value,
       setScrollEnabled: () => true,
       node: node
     }),
@@ -238,6 +271,7 @@ export const FluidTabs = forwardRef<TabsRef, TabProps>(function FluidTabs(
 
       if (onChangeTab) {
         runOnJS(onChangeTab)({ i: result, from: previousTab.value });
+        previousTab.value = result;
       }
     },
     []
@@ -297,6 +331,7 @@ export const FluidTabs = forwardRef<TabsRef, TabProps>(function FluidTabs(
       translateX.value = value;
     })
     .onEnd((event) => {
+      if (locked.value || forcedLock.value) return;
       if (currentTab.value === 2 && Platform.OS === "android") return;
       const velocityX =
         event.velocityX < 0 ? event.velocityX * -1 : event.velocityX;
@@ -325,6 +360,7 @@ export const FluidTabs = forwardRef<TabsRef, TabProps>(function FluidTabs(
           isDrawerOpen.value = false;
           currentTab.value = 1;
           runOnJS(onDrawerStateChange)(false);
+
           return;
         } else if (!isSwipeLeft && finalValue < 100) {
           translateX.value = withSpring(0, animationConfig);
@@ -373,6 +409,7 @@ export const FluidTabs = forwardRef<TabsRef, TabProps>(function FluidTabs(
       ]
     };
   }, []);
+
   return (
     <GestureDetector gesture={gesture}>
       <Animated.View
@@ -385,7 +422,15 @@ export const FluidTabs = forwardRef<TabsRef, TabProps>(function FluidTabs(
             width: containerWidth,
             flexDirection: "row"
           },
-          animatedStyles
+          deviceMode === "tablet"
+            ? {
+                transform: [
+                  {
+                    translateX: 0
+                  }
+                ]
+              }
+            : animatedStyles
         ]}
       >
         {children}

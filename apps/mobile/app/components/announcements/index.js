@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -25,7 +25,7 @@ import {
   eUnSubscribeEvent
 } from "../../services/event-manager";
 import { useMessageStore } from "../../stores/use-message-store";
-import { useThemeStore } from "../../stores/use-theme-store";
+import { useThemeColors } from "@notesnook/theme";
 import {
   eCloseAnnouncementDialog,
   eOpenAnnouncementDialog
@@ -34,10 +34,69 @@ import BaseDialog from "../dialog/base-dialog";
 import { allowedOnPlatform, renderItem } from "./functions";
 import { useCallback } from "react";
 
+/**
+ * Test announcement
+ * {
+    id: "some-announcement",
+    type: "dialog",
+    body: [
+      {
+        type: "title",
+        text: "This is a title",
+        platforms: ["all"]
+      },
+      {
+        type: "description",
+        text: "Most of you are too busy to keep up to date with what's happening in Notesnook. That is unfortunate because Notesnook has come a looooong way.",
+        style: {
+          marginBottom: 1
+        },
+        platforms: ["all"]
+      },
+      {
+        type: "description",
+        text: "To solve this, we are launching the Notesnook Digest — a newsletter to help you stay updated about Notesnook development. And to keep things interesting I'll also sprinkle this newsletter with other interesting stuff like privacy tips & news, interesting books, things I am looking forward to etc.",
+        style: {
+          marginBottom: 1
+        },
+        platforms: ["all"]
+      },
+      {
+        type: "description",
+        text: "So be sure to subscribe. There won't be a proper schedule to this (yet) maybe once or twice a month. I promise no spam — only more awesomeness.",
+        style: {
+          marginBottom: 1
+        },
+        platforms: ["all"]
+      },
+      {
+        type: "description",
+        text: "— May privacy reign.",
+        style: {
+          marginBottom: 1
+        },
+        platforms: ["all"]
+      },
+      {
+        type: "callToActions",
+        actions: [
+          {
+            type: "promo",
+            title: "15% Off",
+            platforms: ["android"],
+            data: "com.streetwriters.notesnook.sub.yr.15"
+          }
+        ],
+        platforms: ["all"]
+      }
+    ]
+  }
+ */
+
 export const AnnouncementDialog = () => {
-  const colors = useThemeStore((state) => state.colors);
+  const { colors } = useThemeColors();
   const [visible, setVisible] = useState(false);
-  const [info, setInfo] = useState(null);
+  const [info, setInfo] = useState();
   const remove = useMessageStore((state) => state.remove);
 
   useEffect(() => {
@@ -51,7 +110,9 @@ export const AnnouncementDialog = () => {
 
   const open = (data) => {
     setInfo(data);
-    setVisible(true);
+    setImmediate(() => {
+      setVisible(true);
+    });
   };
 
   const close = useCallback(() => {
@@ -73,7 +134,7 @@ export const AnnouncementDialog = () => {
       <View
         style={{
           width: DDS.isTab ? 600 : "100%",
-          backgroundColor: colors.bg,
+          backgroundColor: colors.primary.background,
           maxHeight: DDS.isTab ? "90%" : "100%",
           borderRadius: DDS.isTab ? 10 : 0,
           overflow: "hidden",

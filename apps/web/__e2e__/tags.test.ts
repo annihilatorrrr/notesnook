@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -20,7 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import { test, expect } from "@playwright/test";
 import { AppModel } from "./models/app.model";
 import { Item } from "./models/types";
-import { NOTE } from "./utils";
+import { groupByOptions, NOTE, orderByOptions, sortByOptions } from "./utils";
 
 const TAG: Item = { title: "hello-world" };
 const EDITED_TAG: Item = { title: "hello-world-2" };
@@ -33,6 +33,21 @@ test("create a tag", async ({ page }) => {
   const tag = await tags.createItem(TAG);
 
   expect(tag).toBeDefined();
+});
+
+test("creating a tag with name of an existing tag should give an error", async ({
+  page
+}) => {
+  const app = new AppModel(page);
+  await app.goto();
+  const tags = await app.goToTags();
+  await tags.createItem(TAG);
+
+  await tags.createItem(TAG);
+
+  expect(
+    await app.toasts.waitForToast("Tag with this title already exists.")
+  ).toBe(true);
 });
 
 test("create a note inside a tag", async ({ page }) => {
@@ -71,7 +86,7 @@ test("delete a tag", async ({ page }) => {
 
   await tag?.delete();
 
-  expect(await app.toasts.waitForToast("1 tag deleted")).toBe(true);
+  expect(await app.toasts.waitForToast("Tag deleted")).toBe(true);
   expect(await tags?.findItem(TAG)).toBeUndefined();
 });
 
@@ -175,4 +190,52 @@ test("delete the last note of a tag that is also a shortcut", async ({
   await note?.contextMenu.moveToTrash();
 
   expect(await app.getRouteHeader()).toBe("Notes");
+});
+
+test(`sort tags`, async ({ page }, info) => {
+  info.setTimeout(2 * 60 * 1000);
+
+  const app = new AppModel(page);
+  await app.goto();
+  const tags = await app.goToTags();
+  const titles = ["G", "C", "Gz", "2", "A"];
+  for (const title of titles) {
+    const tag = await tags.createItem({ title: `${title}` });
+    if (!tag) continue;
+  }
+
+  for (const groupBy of groupByOptions) {
+    for (const sortBy of sortByOptions) {
+      for (const orderBy of orderByOptions) {
+        await test.step(`group by ${groupBy}, sort by ${sortBy}, order by ${orderBy}`, async () => {
+          const sortResult = await tags?.sort({
+            groupBy,
+            orderBy,
+            sortBy
+          });
+          if (!sortResult) return;
+
+          await expect(tags.items).toHaveCount(titles.length);
+        });
+      }
+    }
+  }
+});
+
+test("creating more than 5 tags shouldn't be possible on basic plan", async ({
+  page
+}) => {
+  await page.exposeBinding("isBasic", () => true);
+  const app = new AppModel(page);
+  await app.goto();
+  const tags = await app.goToTags();
+  for (const tag of ["tag1", "tag2", "tag3", "tag4", "tag5"]) {
+    await tags.createItem({ title: tag });
+  }
+
+  const result = await Promise.race([
+    tags.createItem({ title: "tag6" }),
+    app.toasts.waitForToast("Upgrade to Notesnook Pro to create more tags.")
+  ]);
+  expect(result).toBe(true);
 });

@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,40 +17,31 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { File } from "./types";
-import { Chunk } from "@notesnook/crypto/dist/src/types";
+import { File } from "./types.js";
+import { IFileStorage } from "./interfaces.js";
 
-export default class FileStreamSource implements UnderlyingSource<Chunk> {
-  private storage: LocalForage;
-  private file: File;
-  private offset = 0;
+export default class FileStreamSource {
+  private index = 0;
 
-  constructor(storage: LocalForage, file: File) {
-    this.storage = storage;
-    this.file = file;
-  }
+  constructor(
+    private readonly storage: IFileStorage,
+    private readonly file: File,
+    private readonly chunks: string[]
+  ) {}
 
   start() {}
 
-  async pull(controller: ReadableStreamController<Chunk>) {
-    const data = await this.readChunk(this.offset++);
-    const isFinalChunk = this.offset === this.file.chunks;
+  async pull(controller: ReadableStreamDefaultController<Uint8Array>) {
+    const data = await this.readChunk(this.index++);
 
-    if (data)
-      controller.enqueue({
-        data,
-        final: isFinalChunk
-      });
+    if (data) controller.enqueue(data);
 
+    const isFinalChunk = this.index === this.chunks.length;
     if (isFinalChunk || !data) controller.close();
   }
 
-  private readChunk(offset: number) {
-    if (offset > this.file.chunks) return;
-    return this.storage.getItem<Uint8Array>(this.getChunkKey(offset));
-  }
-
-  private getChunkKey(offset: number): string {
-    return `${this.file.filename}-chunk-${offset}`;
+  private readChunk(index: number) {
+    if (index > this.chunks.length) return;
+    return this.storage.readChunk(this.chunks[index]);
   }
 }

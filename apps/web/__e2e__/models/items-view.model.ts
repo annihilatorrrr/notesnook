@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -26,14 +26,13 @@ import { fillItemDialog } from "./utils";
 
 export class ItemsViewModel extends BaseViewModel {
   private readonly createButton: Locator;
-
-  constructor(page: Page, private readonly id: "topics" | "tags") {
-    super(page, id);
-    this.createButton = page.locator(getTestId(`${id}-action-button`));
+  constructor(page: Page) {
+    super(page, "tags", "tags");
+    this.createButton = page.locator(getTestId(`tags-action-button`));
   }
 
   async createItem(item: Item) {
-    const titleToCompare = this.id === "tags" ? `#${item.title}` : item.title;
+    const titleToCompare = `#${item.title}`;
 
     await this.createButton.first().click();
     await fillItemDialog(this.page, item);
@@ -43,9 +42,9 @@ export class ItemsViewModel extends BaseViewModel {
   }
 
   async findItem(item: Item) {
-    const titleToCompare = this.id === "tags" ? `#${item.title}` : item.title;
+    const titleToCompare = `#${item.title}`;
     for await (const _item of this.iterateItems()) {
-      const itemModel = new ItemModel(_item);
+      const itemModel = new ItemModel(_item, "tag");
       const title = await itemModel.getTitle();
       if (title === titleToCompare) return itemModel;
     }

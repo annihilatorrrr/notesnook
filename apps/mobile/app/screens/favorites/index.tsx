@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -18,71 +18,73 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 import React from "react";
-import { db } from "../../common/database";
 import DelayLayout from "../../components/delay-layout";
+import { Header } from "../../components/header";
 import List from "../../components/list";
+import SelectionHeader from "../../components/selection-header";
 import { useNavigationFocus } from "../../hooks/use-navigation-focus";
 import Navigation, { NavigationProps } from "../../services/navigation";
-import SearchService from "../../services/search";
 import SettingsService from "../../services/settings";
-import { useFavoriteStore } from "../../stores/use-favorite-store";
+import { useFavorites } from "../../stores/use-favorite-store";
 import useNavigationStore from "../../stores/use-navigation-store";
-import { useNoteStore } from "../../stores/use-notes-store";
-const prepareSearch = () => {
-  SearchService.update({
-    placeholder: "Search in favorites",
-    type: "notes",
-    title: "Favorites",
-    get: () => db.notes?.favorites
-  });
-};
-
-const PLACEHOLDER_DATA = {
-  heading: "Your favorites",
-  paragraph: "You have not added any notes to favorites yet.",
-  button: null,
-  loading: "Loading your favorites"
-};
+import { db } from "../../common/database";
+import { strings } from "@notesnook/intl";
 
 export const Favorites = ({
   navigation,
   route
 }: NavigationProps<"Favorites">) => {
-  const favorites = useFavoriteStore((state) => state.favorites);
-  const setFavorites = useFavoriteStore((state) => state.setFavorites);
-  const loading = useNoteStore((state) => state.loading);
+  const [favorites, loading, refresh] = useFavorites();
   const isFocused = useNavigationFocus(navigation, {
     onFocus: (prev) => {
       Navigation.routeNeedsUpdate(
         route.name,
         Navigation.routeUpdateFunctions[route.name]
       );
-      useNavigationStore.getState().update({
-        name: route.name
-      });
-      SearchService.prepareSearch = prepareSearch;
-      return !prev?.current;
+      useNavigationStore.getState().setFocusedRouteId(route?.name);
+      return false;
     },
     onBlur: () => false,
     delay: SettingsService.get().homepage === route.name ? 1 : -1
   });
 
   return (
-    <DelayLayout wait={loading}>
-      <List
-        listData={favorites}
-        type="notes"
-        refreshCallback={() => {
-          setFavorites();
-        }}
-        screen="Favorites"
-        loading={loading || !isFocused}
-        placeholderData={PLACEHOLDER_DATA}
-        headerProps={{
-          heading: "Favorites"
+    <>
+      <SelectionHeader id={route.name} items={favorites} type="note" />
+      <Header
+        renderedInRoute={route.name}
+        title={strings.routes[route.name]()}
+        canGoBack={false}
+        hasSearch={true}
+        id={route.name}
+        onSearch={() => {
+          Navigation.push("Search", {
+            placeholder: strings.searchInRoute(route.name),
+            type: "note",
+            title: route.name,
+            route: route.name,
+            items: db.notes.favorites
+          });
         }}
       />
-    </DelayLayout>
+      <DelayLayout wait={loading}>
+        <List
+          data={favorites}
+          dataType="note"
+          onRefresh={() => {
+            refresh();
+          }}
+          renderedInRoute="Favorites"
+          loading={loading}
+          placeholder={{
+            title: strings.yourFavorites(),
+            paragraph: strings.favoritesEmpty(),
+            loading: strings.loadingFavorites()
+          }}
+          headerTitle={strings.routes.Favorites()}
+        />
+      </DelayLayout>
+    </>
   );
 };
 

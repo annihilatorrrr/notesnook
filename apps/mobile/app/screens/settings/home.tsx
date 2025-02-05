@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -18,115 +18,58 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { View } from "react-native";
-import Animated, { FadeInDown, FadeOutDown } from "react-native-reanimated";
+import Animated, { FadeInDown } from "react-native-reanimated";
 import DelayLayout from "../../components/delay-layout";
-import BaseDialog from "../../components/dialog/base-dialog";
-import { ProgressBarComponent } from "../../components/ui/svg/lazy";
-import Heading from "../../components/ui/typography/heading";
-import Paragraph from "../../components/ui/typography/paragraph";
+import { Header } from "../../components/header";
 import { useNavigationFocus } from "../../hooks/use-navigation-focus";
-import {
-  eSubscribeEvent,
-  eUnSubscribeEvent
-} from "../../services/event-manager";
 import useNavigationStore from "../../stores/use-navigation-store";
-import { useThemeStore } from "../../stores/use-theme-store";
-import { SIZE } from "../../utils/size";
 import { SectionGroup } from "./section-group";
 import { settingsGroups } from "./settings-data";
 import { RouteParams, SettingSection } from "./types";
 import SettingsUserSection from "./user-section";
+import { strings } from "@notesnook/intl";
+
 const keyExtractor = (item: SettingSection) => item.id;
 
 const Home = ({
   navigation
 }: NativeStackScreenProps<RouteParams, "SettingsHome">) => {
-  const colors = useThemeStore((state) => state.colors);
-  const [loading, setLoading] = useState(false);
-
   useNavigationFocus(navigation, {
     onFocus: () => {
-      useNavigationStore.getState().update({
-        name: "Settings"
-      });
+      useNavigationStore.getState().setFocusedRouteId("Settings");
       return false;
     },
     focusOnInit: true
   });
 
   const renderItem = ({ item }: { item: SettingSection; index: number }) =>
-    item.name === "account" ? (
+    item.id === "account" ? (
       <SettingsUserSection item={item} />
     ) : (
       <SectionGroup item={item} />
     );
 
-  useEffect(() => {
-    function settingsLoading(state: boolean) {
-      setLoading(state || true);
-    }
-    eSubscribeEvent("settings-loading", settingsLoading);
-    return () => {
-      eUnSubscribeEvent("settings-loading", settingsLoading);
-    };
-  }, []);
-
   return (
-    <DelayLayout delay={300} type="settings">
-      <View>
-        {loading && (
-          //@ts-ignore // Migrate to typescript required.
-          <BaseDialog animated={false} bounce={false} visible={true}>
-            <View
-              style={{
-                width: "100%",
-                height: "100%",
-                backgroundColor: colors.bg,
-                justifyContent: "center",
-                alignItems: "center"
-              }}
-            >
-              <Heading color={colors.pri} size={SIZE.lg}>
-                Logging out
-              </Heading>
-              <Paragraph color={colors.icon}>
-                Please wait while we log out and clear app data.
-              </Paragraph>
-              <View
-                style={{
-                  flexDirection: "row",
-                  width: 100,
-                  marginTop: 15
-                }}
-              >
-                <ProgressBarComponent
-                  height={5}
-                  width={100}
-                  animated={true}
-                  useNativeDriver
-                  indeterminate
-                  indeterminateAnimationDuration={2000}
-                  unfilledColor={colors.nav}
-                  color={colors.accent}
-                  borderWidth={0}
-                />
-              </View>
-            </View>
-          </BaseDialog>
-        )}
-
+    <>
+      <Header
+        renderedInRoute="Settings"
+        title={strings.routes.Settings()}
+        canGoBack={false}
+        id="Settings"
+      />
+      <DelayLayout delay={300} type="settings">
         <Animated.FlatList
           entering={FadeInDown}
-          exiting={FadeOutDown}
           data={settingsGroups}
+          windowSize={1}
           keyExtractor={keyExtractor}
           ListFooterComponent={<View style={{ height: 200 }} />}
           renderItem={renderItem}
         />
-      </View>
-    </DelayLayout>
+      </DelayLayout>
+    </>
   );
 };
 

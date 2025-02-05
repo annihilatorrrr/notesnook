@@ -10,22 +10,34 @@ const authors = readFileSync("AUTHORS", "utf-8");
 const isAuthor = authors.includes(`<${authorEmail}>`);
 
 const SCOPES = [
-  // for full list of scopes + details see: https://github.com/streetwriters/notesnook-private/blob/master/CONTRIBUTING.md#commit-guidelines
+  // for full list of scopes + details see: https://github.com/streetwriters/notesnook/blob/master/CONTRIBUTING.md#commit-guidelines
 
   "mobile",
   "web",
+  "vericrypt",
+  "monograph",
   "desktop",
   "crypto",
   "editor",
   "logger",
   "theme",
+  "server",
   "core",
+  "fs",
+  "ui",
+  "clipper",
   "config",
   "ci",
   "setup",
   "docs",
   "refactor",
-  "misc"
+  "misc",
+  "common",
+  "global",
+  "docs",
+  "themebuilder",
+  "intl",
+  "webclipper"
 ];
 
 module.exports = {

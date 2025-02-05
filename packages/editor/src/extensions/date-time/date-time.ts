@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -23,6 +23,7 @@ import {
   InputRuleFinder,
   ExtendedRegExpMatchArray
 } from "@tiptap/core";
+import { formatDate } from "@notesnook/common";
 
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
@@ -40,17 +41,36 @@ declare module "@tiptap/core" {
        * Insert date & time at current position
        */
       insertDateTime: () => ReturnType;
+
+      /**
+       * Insert date & time with time zone at current position
+       */
+      insertDateTimeWithTimeZone: () => ReturnType;
     };
   }
 }
 
-export const DateTime = Extension.create({
+export type DateTimeOptions = {
+  dateFormat: string;
+  timeFormat: "12-hour" | "24-hour";
+};
+
+export const DateTime = Extension.create<DateTimeOptions>({
   name: "datetime",
+
+  addOptions() {
+    return {
+      dateFormat: "DD-MM-YYYY",
+      timeFormat: "12-hour"
+    };
+  },
+
   addKeyboardShortcuts() {
     return {
       "Alt-t": ({ editor }) => editor.commands.insertTime(),
       "Alt-d": ({ editor }) => editor.commands.insertDate(),
-      "Mod-Alt-d": ({ editor }) => editor.commands.insertDateTime()
+      "Mod-Alt-d": ({ editor }) => editor.commands.insertDateTime(),
+      "Mod-Alt-z": ({ editor }) => editor.commands.insertDateTimeWithTimeZone()
     };
   },
 
@@ -59,15 +79,41 @@ export const DateTime = Extension.create({
       insertDate:
         () =>
         ({ commands }) =>
-          commands.insertContent(currentDate()),
+          commands.insertContent(
+            formatDate(Date.now(), {
+              dateFormat: this.options.dateFormat,
+              type: "date"
+            })
+          ),
       insertTime:
         () =>
         ({ commands }) =>
-          commands.insertContent(currentTime()),
+          commands.insertContent(
+            formatDate(Date.now(), {
+              timeFormat: this.options.timeFormat,
+              type: "time"
+            })
+          ),
       insertDateTime:
         () =>
         ({ commands }) =>
-          commands.insertContent(currentDateTime())
+          commands.insertContent(
+            formatDate(Date.now(), {
+              dateFormat: this.options.dateFormat,
+              timeFormat: this.options.timeFormat,
+              type: "date-time"
+            })
+          ),
+      insertDateTimeWithTimeZone:
+        () =>
+        ({ commands }) =>
+          commands.insertContent(
+            formatDate(Date.now(), {
+              dateFormat: this.options.dateFormat,
+              timeFormat: this.options.timeFormat,
+              type: "date-time-timezone"
+            })
+          )
     };
   },
 
@@ -76,43 +122,44 @@ export const DateTime = Extension.create({
       shortcutInputRule({
         shortcut: "/time",
         replace: () => {
-          return currentTime();
+          return formatDate(Date.now(), {
+            timeFormat: this.options.timeFormat,
+            type: "time"
+          });
         }
       }),
       shortcutInputRule({
         shortcut: "/date",
         replace: () => {
-          return currentDate();
+          return formatDate(Date.now(), {
+            dateFormat: this.options.dateFormat,
+            type: "date"
+          });
         }
       }),
       shortcutInputRule({
         shortcut: "/now",
         replace: () => {
-          return currentDateTime();
+          return formatDate(Date.now(), {
+            dateFormat: this.options.dateFormat,
+            timeFormat: this.options.timeFormat,
+            type: "date-time"
+          });
+        }
+      }),
+      shortcutInputRule({
+        shortcut: "/nowz",
+        replace: () => {
+          return formatDate(Date.now(), {
+            dateFormat: this.options.dateFormat,
+            timeFormat: this.options.timeFormat,
+            type: "date-time-timezone"
+          });
         }
       })
     ];
   }
 });
-
-function currentTime() {
-  return new Date().toLocaleTimeString(window.navigator.languages.slice(), {
-    hour: "2-digit",
-    minute: "2-digit"
-  });
-}
-
-function currentDateTime() {
-  return `${currentDate()}, ${currentTime()}`;
-}
-
-function currentDate() {
-  return new Date().toLocaleDateString(window.navigator.languages.slice(), {
-    month: "long",
-    day: "2-digit",
-    year: "numeric"
-  });
-}
 
 function shortcutInputRule(config: {
   shortcut: string;
@@ -150,4 +197,46 @@ function textInputRule(config: {
       if (config.after) config.after(props);
     }
   });
+}
+
+export function replaceDateTime(
+  value: string,
+  dateFormat = "DD-MM-YYYY",
+  timeFormat: "12-hour" | "24-hour" = "12-hour"
+) {
+  value = value.replaceAll(
+    "/time ",
+    formatDate(Date.now(), {
+      timeFormat,
+      type: "time"
+    }) + " "
+  );
+
+  value = value.replaceAll(
+    "/date ",
+    formatDate(Date.now(), {
+      dateFormat,
+      type: "date"
+    }) + " "
+  );
+
+  value = value.replaceAll(
+    "/now ",
+    formatDate(Date.now(), {
+      dateFormat,
+      timeFormat,
+      type: "date-time"
+    }) + " "
+  );
+
+  value = value.replaceAll(
+    "/nowz ",
+    formatDate(Date.now(), {
+      dateFormat,
+      timeFormat,
+      type: "date-time-timezone"
+    }) + " "
+  );
+
+  return value;
 }

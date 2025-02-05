@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -21,37 +21,45 @@ import React from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
 import { notesnook } from "../../../e2e/test.ids";
-import { useThemeStore } from "../../stores/use-theme-store";
+import { useThemeColors } from "@notesnook/theme";
 import { SIZE } from "../../utils/size";
 import { Button } from "../ui/button";
 import Paragraph from "../ui/typography/paragraph";
+import { getColorLinearShade } from "../../utils/colors";
+import { strings } from "@notesnook/intl";
 
 const DialogButtons = ({
   onPressPositive,
   onPressNegative,
   positiveTitle,
-  negativeTitle = "Cancel",
+  negativeTitle = strings.cancel(),
   loading,
   doneText,
   positiveType
 }) => {
-  const colors = useThemeStore((state) => state.colors);
+  const { colors, isDark } = useThemeColors();
 
   return (
     <View
       style={[
         styles.container,
         {
-          backgroundColor: colors.nav,
+          backgroundColor: colors.secondary.background,
           height: 60,
-          borderBottomRightRadius: 10,
-          borderBottomLeftRadius: 10,
-          paddingHorizontal: 12
+          borderBottomRightRadius: 5,
+          borderBottomLeftRadius: 5,
+          paddingHorizontal: 12,
+          borderTopWidth: 0.7,
+          borderTopColor: getColorLinearShade(
+            colors.secondary.background,
+            0.05,
+            isDark
+          )
         }
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={colors.accent} size={SIZE.lg} />
+        <ActivityIndicator color={colors.primary.accent} size={SIZE.lg} />
       ) : doneText ? (
         <View
           style={{
@@ -60,11 +68,11 @@ const DialogButtons = ({
           }}
         >
           <Icon
-            color={colors.accent}
+            color={colors.primary.accent}
             name="check-circle-outline"
             size={SIZE.md}
           />
-          <Paragraph color={colors.accent}>{" " + doneText}</Paragraph>
+          <Paragraph color={colors.primary.accent}>{" " + doneText}</Paragraph>
         </View>
       ) : (
         <View />
@@ -80,7 +88,7 @@ const DialogButtons = ({
           onPress={onPressNegative}
           fontSize={SIZE.md}
           testID={notesnook.ids.default.dialog.no}
-          type="gray"
+          type="plain"
           bold
           title={negativeTitle}
         />

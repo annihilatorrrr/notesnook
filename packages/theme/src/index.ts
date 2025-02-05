@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -16,7 +16,53 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
+import {
+  SchemeColors,
+  SchemeColorsAsCSSVariables,
+  ThemeDefinition
+} from "./theme-engine/types.js";
 
-export * from "./theme/accents";
-export * from "./themeprovider";
-export * from "./theme";
+export * from "./theme/index.js";
+export * from "./theme-engine/index.js";
+export * from "./theme-engine/types.js";
+export * from "./emotion/index.js";
+
+declare global {
+  // eslint-disable-next-line no-var
+  var DEFAULT_THEME: ThemeDefinition | undefined;
+}
+
+declare module "csstype" {
+  interface Properties {
+    backgroundColor?:
+      | Property.BackgroundColor
+      | SchemeColors
+      | SchemeColorsAsCSSVariables;
+    color?: Property.Color | SchemeColors | SchemeColorsAsCSSVariables;
+    accentColor?:
+      | Property.AccentColor
+      | SchemeColors
+      | SchemeColorsAsCSSVariables;
+
+    borderColor?:
+      | Property.BorderColor
+      | SchemeColors
+      | SchemeColorsAsCSSVariables;
+    borderBottomColor?:
+      | Property.BorderBottomColor
+      | SchemeColors
+      | SchemeColorsAsCSSVariables;
+    borderTopColor?:
+      | Property.BorderTopColor
+      | SchemeColors
+      | SchemeColorsAsCSSVariables;
+    borderLeftColor?:
+      | Property.BorderLeftColor
+      | SchemeColors
+      | SchemeColorsAsCSSVariables;
+    borderRightColor?:
+      | Property.BorderRightColor
+      | SchemeColors
+      | SchemeColorsAsCSSVariables;
+  }
+}

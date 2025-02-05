@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -20,23 +20,18 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import React from "react";
 import { Linking, View } from "react-native";
 //import SettingsBackupAndRestore from '../../screens/settings/backup-restore';
+import { useThemeColors } from "@notesnook/theme";
 import { eSendEvent, presentSheet } from "../../services/event-manager";
-import Sync from "../../services/sync";
-import { useThemeStore } from "../../stores/use-theme-store";
-import {
-  eCloseAnnouncementDialog,
-  eCloseProgressDialog
-} from "../../utils/events";
+import { eCloseAnnouncementDialog } from "../../utils/events";
 import { SIZE } from "../../utils/size";
 import { sleep } from "../../utils/time";
 import { PricingPlans } from "../premium/pricing-plans";
 import SheetProvider from "../sheet-provider";
-import { Progress } from "../sheets/progress";
 import { Button } from "../ui/button";
 import { allowedOnPlatform, getStyle } from "./functions";
 
 export const Cta = ({ actions, style = {}, color, inline }) => {
-  const colors = useThemeStore((state) => state.colors);
+  const { colors } = useThemeColors();
   let buttons =
     actions.filter((item) => allowedOnPlatform(item.platforms)) || [];
 
@@ -46,7 +41,9 @@ export const Cta = ({ actions, style = {}, color, inline }) => {
       await sleep(500);
     }
     if (item.type === "link") {
-      Linking.openURL(item.data).catch(console.log);
+      Linking.openURL(item.data).catch(() => {
+        /* empty */
+      });
     } else if (item.type === "promo") {
       presentSheet({
         component: (
@@ -58,13 +55,6 @@ export const Cta = ({ actions, style = {}, color, inline }) => {
             }}
           />
         )
-      });
-    } else if (item.type === "force-sync") {
-      eSendEvent(eCloseProgressDialog);
-      await sleep(300);
-      Progress.present();
-      Sync.run("global", true, true, () => {
-        eSendEvent(eCloseProgressDialog);
       });
     }
   };
@@ -95,8 +85,7 @@ export const Cta = ({ actions, style = {}, color, inline }) => {
                 style={{
                   height: 30,
                   alignSelf: "flex-start",
-                  paddingHorizontal: 0,
-                  marginTop: -6
+                  paddingHorizontal: 0
                 }}
               />
             ))}
@@ -107,14 +96,13 @@ export const Cta = ({ actions, style = {}, color, inline }) => {
                 key={item.title}
                 title={item.title}
                 fontSize={SIZE.sm}
-                type="gray"
+                type="plain"
                 onPress={() => onPress(item)}
                 width={null}
                 height={30}
                 style={{
                   alignSelf: "flex-start",
                   paddingHorizontal: 0,
-                  marginTop: -6,
                   marginLeft: 12
                 }}
                 textStyle={{
@@ -132,9 +120,11 @@ export const Cta = ({ actions, style = {}, color, inline }) => {
                 title={item.title}
                 fontSize={SIZE.md}
                 buttonType={{
-                  color: color ? color : colors.accent,
-                  text: colors.light,
-                  selected: color ? color : colors.accent,
+                  color: color ? color : colors.primary.accent,
+                  text: color
+                    ? colors.static.white
+                    : colors.primary.accentForeground,
+                  selected: color ? color : colors.primary.accent,
                   opacity: 1
                 }}
                 onPress={() => onPress(item)}
@@ -151,8 +141,8 @@ export const Cta = ({ actions, style = {}, color, inline }) => {
               <Button
                 key={item.title}
                 title={item.title}
-                fontSize={SIZE.xs + 1}
-                type="gray"
+                fontSize={SIZE.xs}
+                type="plain"
                 onPress={() => onPress(item)}
                 width={null}
                 height={30}

@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -18,44 +18,86 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 import { Editor, Extension, posToDOMRect } from "@tiptap/core";
+import { inlineDebounce } from "../../utils/debounce.js";
 
-let onWindowResize: ((this: Window, ev: UIEvent) => void) | undefined =
-  undefined;
-export const KeepInView = Extension.create({
+type KeepInViewOptions = {
+  scrollIntoViewOnWindowResize: boolean;
+};
+
+export const KeepInView = Extension.create<
+  KeepInViewOptions,
+  {
+    onWindowResize?: ((this: Window, ev: UIEvent) => void) | undefined;
+  }
+>({
   name: "keepinview",
+  addOptions() {
+    return {
+      scrollIntoViewOnWindowResize: true
+    };
+  },
+
+  addStorage() {
+    return {
+      onWindowResize: undefined
+    };
+  },
 
   onCreate() {
-    onWindowResize = () => {
+    if (!this.options.scrollIntoViewOnWindowResize) return;
+    if (this.storage.onWindowResize) return;
+
+    this.storage.onWindowResize = () => {
       keepLastLineInView(this.editor);
     };
-    window.addEventListener("resize", onWindowResize);
+    window.addEventListener("resize", this.storage.onWindowResize);
   },
 
   onDestroy() {
-    if (!onWindowResize) return;
-    window.removeEventListener("resize", onWindowResize);
-    onWindowResize = undefined;
+    if (!this.storage.onWindowResize) return;
+    window.removeEventListener("resize", this.storage.onWindowResize);
+    this.storage.onWindowResize = undefined;
   },
-
-  addKeyboardShortcuts() {
-    return {
-      Enter: ({ editor }) => {
-        setTimeout(() => {
-          keepLastLineInView(editor);
-        });
-        return false;
-      }
-    };
+  onSelectionUpdate() {
+    inlineDebounce(
+      "keep_in_view",
+      () => {
+        keepLastLineInView(this.editor);
+      },
+      100
+    );
   }
 });
 
-export function keepLastLineInView(editor: Editor) {
-  const THRESHOLD = 100;
+export function keepLastLineInView(
+  editor: Editor,
+  THRESHOLD = 80,
+  SCROLL_THRESHOLD = 100
+) {
+  if (
+    !editor.view ||
+    editor.view.isDestroyed ||
+    !editor.state.selection.empty ||
+    !editor.isEditable
+  )
+    return;
+
+  const isPopupVisible = document.querySelector(".editor-mobile-toolbar-popup");
 
   const node = editor.state.selection.$from;
+  if (node.pos > editor.state.doc.nodeSize) return;
+
   const { top } = posToDOMRect(editor.view, node.pos, node.pos + 1);
-  const isBelowThreshold = window.innerHeight - top < THRESHOLD;
-  if (isBelowThreshold) {
+  const isBelowThreshold =
+    window.innerHeight - top < (isPopupVisible ? THRESHOLD + 60 : THRESHOLD);
+  const isAboveThreshold = top < THRESHOLD;
+  const DIFF_BOTTOM = THRESHOLD - (window.innerHeight - top);
+
+  let DIFF_TOP = THRESHOLD - top;
+
+  if (DIFF_TOP > 0) DIFF_TOP = DIFF_TOP * -1;
+
+  if (isBelowThreshold || isAboveThreshold) {
     let { node: domNode } = editor.view.domAtPos(node.pos);
     if (domNode.nodeType === Node.TEXT_NODE && domNode.parentNode)
       domNode = domNode.parentNode;
@@ -63,7 +105,12 @@ export function keepLastLineInView(editor: Editor) {
     if (domNode instanceof HTMLElement) {
       const container = findScrollContainer(domNode);
       if (container) {
-        container.scrollBy({ top: THRESHOLD, behavior: "smooth" });
+        container.scrollBy({
+          top: isAboveThreshold
+            ? DIFF_TOP + 10
+            : DIFF_BOTTOM + (isPopupVisible ? 60 : 0),
+          behavior: "smooth"
+        });
       } else domNode.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   }

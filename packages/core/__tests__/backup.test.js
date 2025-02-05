@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -18,145 +18,110 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 import {
-  StorageInterface,
+  TEST_NOTE,
   databaseTest,
-  noteTest,
+  loginFakeUser,
   notebookTest
-} from "./utils";
-import v52Backup from "./__fixtures__/backup.v5.2.json";
-import v52BackupCopy from "./__fixtures__/backup.v5.2.copy.json";
-import { qclone } from "qclone";
-
-beforeEach(() => {
-  StorageInterface.clear();
-});
+} from "./utils/index.ts";
+import { test, expect } from "vitest";
 
 test("export backup", () =>
-  noteTest().then(() =>
-    notebookTest().then(async ({ db }) => {
-      const exp = await db.backup.export("node");
-      let backup = JSON.parse(exp);
-      expect(backup.type).toBe("node");
-      expect(backup.date).toBeGreaterThan(0);
-    })
-  ));
+  notebookTest().then(async ({ db }) => {
+    const id = await db.notes.add(TEST_NOTE);
+    const exp = [];
+    for await (const file of db.backup.export({
+      type: "node",
+      encrypt: false
+    })) {
+      exp.push(file);
+    }
+
+    let backup = JSON.parse(exp[1].data);
+    expect(exp.length).toBe(2);
+    expect(exp[0].path).toBe(".nnbackup");
+    expect(backup.type).toBe("node");
+    expect(backup.date).toBeGreaterThan(0);
+    expect(backup.data).toBeTypeOf("string");
+    expect(backup.compressed).toBe(true);
+    expect(backup.encrypted).toBe(false);
+    expect(
+      JSON.parse(await (await db.compressor()).decompress(backup.data)).find(
+        (i) => i.id === id
+      )
+    ).toBeDefined();
+  }));
 
 test("export encrypted backup", () =>
-  noteTest().then(() =>
-    notebookTest().then(async ({ db }) => {
-      const exp = await db.backup.export("node", true);
-      let backup = JSON.parse(exp);
-      expect(backup.type).toBe("node");
-      expect(backup.date).toBeGreaterThan(0);
-      expect(backup.data.iv).toBe("some iv");
-    })
-  ));
+  notebookTest().then(async ({ db }) => {
+    await loginFakeUser(db);
+    await db.notes.add(TEST_NOTE);
 
-test("import backup", () =>
-  noteTest().then(() =>
-    notebookTest().then(async ({ db, id }) => {
-      const exp = await db.backup.export("node");
-      StorageInterface.clear();
-      await db.backup.import(JSON.parse(exp));
-      expect(db.notebooks.notebook(id).data.id).toBe(id);
-    })
-  ));
+    const exp = [];
+    for await (const file of db.backup.export({
+      type: "node",
+      encrypt: true
+    })) {
+      exp.push(file);
+    }
 
-test("import encrypted backup", () =>
-  noteTest().then(() =>
-    notebookTest().then(async ({ db, id }) => {
-      const exp = await db.backup.export("node", true);
-      StorageInterface.clear();
-      await db.backup.import(JSON.parse(exp), "password");
-      expect(db.notebooks.notebook(id).data.id).toBe(id);
-    })
-  ));
+    const backup = JSON.parse(exp[1].data);
+    expect(exp.length).toBe(2);
+    expect(exp[0].path).toBe(".nnbackup");
+    expect(backup.type).toBe("node");
+    expect(backup.date).toBeGreaterThan(0);
+    expect(backup.data.iv).not.toBeUndefined();
+    expect(backup.data).toBeTypeOf("object");
+    expect(backup.compressed).toBe(true);
+    expect(backup.encrypted).toBe(true);
+  }));
 
-test("import tempered backup", () =>
-  noteTest().then(() =>
-    notebookTest().then(async ({ db }) => {
-      const exp = await db.backup.export("node");
-      StorageInterface.clear();
-      const backup = JSON.parse(exp);
-      backup.data.hello = "world";
-      await expect(db.backup.import(backup)).rejects.toThrow(/tempered/);
-    })
-  ));
+test("import backup", async () => {
+  const { db, id } = await notebookTest();
+  const exp = [];
+  for await (const file of db.backup.export({
+    type: "node",
+    encrypt: false
+  })) {
+    exp.push(file);
+  }
 
-describe.each([
-  ["v5.2", v52Backup],
-  ["v5.2 copy", v52BackupCopy]
-])("testing backup version: %s", (version, data) => {
-  test(`import ${version} backup`, () => {
-    return databaseTest().then(async (db) => {
-      await db.backup.import(qclone(data));
-
-      expect(db.settings.raw.id).toBeDefined();
-      expect(db.settings.raw.dateModified).toBeDefined();
-      expect(db.settings.raw.dateEdited).toBeUndefined();
-
-      expect(
-        db.notes.all.every((v) => {
-          const doesNotHaveContent = v.contentId && !v.content;
-          const doesNotHaveColors = !v.colors && (!v.color || v.color.length);
-          const hasTopicsInAllNotebooks =
-            !v.notebooks ||
-            v.notebooks.every((nb) => !!nb.id && !!nb.topics && !nb.topic);
-          const hasDateModified = v.dateModified > 0;
-          return (
-            doesNotHaveContent &&
-            !v.notebook &&
-            hasTopicsInAllNotebooks &&
-            doesNotHaveColors &&
-            hasDateModified
-          );
-        })
-      ).toBeTruthy();
-
-      expect(
-        db.notebooks.all.every((v) => v.title != null && v.dateModified > 0)
-      ).toBeTruthy();
-
-      expect(
-        db.attachments.all.every((v) => v.dateModified > 0 && !v.dateEdited)
-      ).toBeTruthy();
-
-      const allContent = await db.content.all();
-      expect(
-        allContent.every((v) => v.type === "tiptap" || v.deleted)
-      ).toBeTruthy();
-      expect(allContent.every((v) => !v.persistDateEdited)).toBeTruthy();
-      expect(allContent.every((v) => v.dateModified > 0)).toBeTruthy();
-
-      expect(
-        allContent.every(
-          (v) =>
-            !v.data.includes("tox-checklist") &&
-            !v.data.includes("tox-checklist--checked")
-        )
-      ).toBeTruthy();
-    });
-  });
-
-  test(`verify indices of ${version} backup`, () => {
-    return databaseTest().then(async (db) => {
-      await db.backup.import(qclone(data));
-
-      verifyIndex(data, db, "notes", "notes");
-      verifyIndex(data, db, "notebooks", "notebooks");
-      verifyIndex(data, db, "content", "content");
-      verifyIndex(data, db, "attachments", "attachments");
-      // verifyIndex(data, db, "trash", "trash");
-    });
-  });
+  const db2 = await databaseTest();
+  await db2.backup.import(JSON.parse(exp[1].data));
+  expect((await db2.notebooks.notebook(id)).id).toBe(id);
 });
 
-function verifyIndex(backup, db, backupCollection, collection) {
-  if (!backup.data[backupCollection]) return;
+test("import encrypted backup", async () => {
+  const { db, id } = await notebookTest();
+  await loginFakeUser(db);
+  await db.notes.add(TEST_NOTE);
 
-  expect(
-    backup.data[backupCollection].every(
-      (v) => db[collection]._collection.indexer.indices.indexOf(v) > -1
-    )
-  ).toBeTruthy();
-}
+  const exp = [];
+  for await (const file of db.backup.export({
+    type: "node",
+    encrypt: true
+  })) {
+    exp.push(file);
+  }
+
+  const db2 = await databaseTest();
+  await db2.backup.import(JSON.parse(exp[1].data), { password: "password" });
+  expect((await db2.notebooks.notebook(id)).id).toBe(id);
+});
+
+test("import tempered backup", () =>
+  notebookTest().then(async ({ db }) => {
+    await db.notes.add(TEST_NOTE);
+
+    const exp = [];
+    for await (const file of db.backup.export({
+      type: "node",
+      encrypt: false
+    })) {
+      exp.push(file);
+    }
+
+    await db.storage().clear();
+    const backup = JSON.parse(exp[1].data);
+    backup.data += "hello";
+    await expect(db.backup.import(backup)).rejects.toThrow(/tempered/);
+  }));

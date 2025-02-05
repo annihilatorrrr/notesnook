@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -32,18 +32,11 @@ export function useAppState() {
     const subscription = AppState.addEventListener("change", onChange);
 
     return () => {
-      // @ts-expect-error - React Native >= 0.65
-      if (typeof subscription?.remove === "function") {
-        // @ts-expect-error - need update @types/react-native@0.65.x
-        subscription.remove();
-      } else {
-        // React Native < 0.65
-        AppState.removeEventListener("change", onChange);
-      }
+      subscription.remove();
     };
   }, []);
 
   return appState;
 }
 
-export { AppStateStatus };
+export type { AppStateStatus };

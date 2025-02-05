@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,19 +17,19 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { ToolProps } from "../types";
-import { Editor } from "../../types";
-import { Icons } from "../icons";
+import { ToolProps } from "../types.js";
+import { Editor } from "../../types.js";
+import { Icons } from "../icons.js";
 import { useMemo, useRef, useState } from "react";
-import { Icon } from "../components/icon";
-import { EmbedPopup } from "../popups/embed-popup";
-import { TablePopup } from "../popups/table-popup";
-import { MenuItem } from "../../components/menu/types";
-import { useIsMobile, useToolbarLocation } from "../stores/toolbar-store";
-import { ResponsivePresenter } from "../../components/responsive";
-import { showPopup } from "../../components/popup-presenter";
-import { ImageUploadPopup } from "../popups/image-upload";
-import { Button } from "../../components/button";
+import { EmbedPopup } from "../popups/embed-popup.js";
+import { TablePopup } from "../popups/table-popup.js";
+import { MenuItem, Icon } from "@notesnook/ui";
+import { useIsMobile, useToolbarLocation } from "../stores/toolbar-store.js";
+import { ResponsivePresenter } from "../../components/responsive/index.js";
+import { showPopup } from "../../components/popup-presenter/index.js";
+import { ImageUploadPopup } from "../popups/image-upload.js";
+import { Button } from "../../components/button.js";
+import { strings } from "@notesnook/intl";
 
 export function InsertBlock(props: ToolProps) {
   const { editor } = props;
@@ -38,51 +38,52 @@ export function InsertBlock(props: ToolProps) {
   const toolbarLocation = useToolbarLocation();
   const isMobile = useIsMobile();
 
-  const menuItems = useMemo(
-    () => {
-      return [
-        tasklist(editor),
-        outlinelist(editor),
-        horizontalRule(editor),
-        codeblock(editor),
-        mathblock(editor),
-        blockquote(editor),
-        image(editor, isMobile),
-        attachment(editor),
-        isMobile ? embedMobile(editor) : embedDesktop(editor),
-        table(editor)
-      ];
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [isMobile]
-  );
+  const menuItems = useMemo(() => {
+    return [
+      tasklist(editor),
+      outlinelist(editor),
+      horizontalRule(editor),
+      codeblock(editor),
+      mathblock(editor),
+      callout(editor),
+      blockquote(editor),
+      image(editor, isMobile),
+      attachment(editor),
+      isMobile ? embedMobile(editor) : embedDesktop(editor),
+      table(editor)
+    ];
+  }, [editor, isMobile]);
 
   return (
     <>
       <Button
         ref={buttonRef}
+        variant="secondary"
         sx={{
           p: 1,
           m: 0,
-          bg: isOpen ? "hover" : "transparent",
+          bg: isOpen ? "var(--background-secondary)" : "transparent",
           mr: 1,
           display: "flex",
           alignItems: "center",
-          ":hover": { bg: "hover" },
           ":last-of-type": {
             mr: 0
           }
         }}
-        onMouseDown={(e) => e.preventDefault()}
+        onMouseDown={(e) => {
+          if (globalThis.keyboardShown) {
+            e.preventDefault();
+          }
+        }}
         onClick={() => setIsOpen((s) => !s)}
       >
-        <Icon path={Icons.plus} size={18} color={"primary"} />
+        <Icon path={Icons.plus} size="medium" color={"accent"} />
       </Button>
 
       <ResponsivePresenter
         desktop="menu"
         mobile="sheet"
-        title="Choose a block to insert"
+        title={strings.chooseBlockToInsert()}
         isOpen={isOpen}
         items={menuItems}
         onClose={() => setIsOpen(false)}
@@ -100,63 +101,95 @@ export function InsertBlock(props: ToolProps) {
 const horizontalRule = (editor: Editor): MenuItem => ({
   key: "hr",
   type: "button",
-  title: "Horizontal rule",
-  icon: "horizontalRule",
-  isChecked: editor?.isActive("horizontalRule"),
-  onClick: () => editor.current?.chain().focus().setHorizontalRule().run()
+  title: strings.horizontalRule(),
+  icon: Icons.horizontalRule,
+  isChecked: editor.isActive("horizontalRule"),
+  onClick: () => editor.chain().focus().setHorizontalRule().run()
 });
 
 const codeblock = (editor: Editor): MenuItem => ({
   key: "codeblock",
   type: "button",
-  title: "Code block",
-  icon: "codeblock",
-  isChecked: editor?.isActive("codeBlock"),
-  onClick: () => editor.current?.chain().focus().toggleCodeBlock().run()
+  title: strings.codeBlock(),
+  icon: Icons.codeblock,
+  isChecked: editor.isActive("codeBlock"),
+  onClick: () => editor.chain().focus().toggleCodeBlock().run(),
+  modifier: "Mod-Shift-C"
 });
 
 const blockquote = (editor: Editor): MenuItem => ({
   key: "blockquote",
   type: "button",
-  title: "Quote",
-  icon: "blockquote",
-  isChecked: editor?.isActive("blockQuote"),
-  onClick: () => editor.current?.chain().focus().toggleBlockquote().run()
+  title: strings.quote(),
+  icon: Icons.blockquote,
+  isChecked: editor.isActive("blockQuote"),
+  onClick: () => editor.chain().focus().toggleBlockquote().run(),
+  modifier: "Mod-Shift-B"
 });
 
 const mathblock = (editor: Editor): MenuItem => ({
   key: "math",
   type: "button",
-  title: "Math & formulas",
-  icon: "mathBlock",
-  isChecked: editor?.isActive("mathBlock"),
-  onClick: () => editor.current?.chain().focus().insertMathBlock().run()
+  title: strings.mathAndFormulas(),
+  icon: Icons.mathBlock,
+  isChecked: editor.isActive("mathBlock"),
+  onClick: () => editor.chain().focus().insertMathBlock().run(),
+  modifier: "Mod-Shift-M"
+});
+
+const callout = (editor: Editor): MenuItem => ({
+  key: "callout",
+  type: "button",
+  title: strings.callout(),
+  icon: Icons.callout,
+  menu: {
+    items: [
+      "Abstract",
+      "Hint",
+      "Info",
+      "Success",
+      "Warn",
+      "Error",
+      "Example",
+      "Quote"
+    ].map((type) => ({
+      title: type,
+      key: type,
+      type: "button",
+      isChecked: editor.isActive("callout", { type: type.toLowerCase() }),
+      onClick: () =>
+        editor
+          .chain()
+          .focus()
+          .setCallout({ type: type.toLowerCase() as any })
+          .run()
+    }))
+  }
 });
 
 const image = (editor: Editor, isMobile: boolean): MenuItem => ({
   key: "image",
   type: "button",
-  title: "Image",
-  icon: "image",
+  title: strings.image(),
+  icon: Icons.image,
   menu: {
-    title: "Insert an image",
+    title: strings.insertImage(),
     items: [
       {
         key: "upload-from-disk",
         type: "button",
-        title: "Upload from disk",
-        icon: "upload",
-        onClick: () =>
-          editor.current?.chain().focus().openAttachmentPicker("image").run()
+        title: strings.uploadFromDisk(),
+        icon: Icons.upload,
+        onClick: () => editor.storage.openAttachmentPicker?.("image"),
+        modifier: "Mod-Shift-I"
       },
       {
         key: "camera",
         type: "button",
-        title: "Take a photo using camera",
-        icon: "camera",
+        title: strings.takePhotoUsingCamera(),
+        icon: Icons.camera,
         isHidden: !isMobile,
-        onClick: () =>
-          editor.current?.chain().focus().openAttachmentPicker("camera").run()
+        onClick: () => editor.storage.openAttachmentPicker?.("camera")
       },
       isMobile ? uploadImageFromURLMobile(editor) : uploadImageFromURL(editor)
     ]
@@ -166,10 +199,10 @@ const image = (editor: Editor, isMobile: boolean): MenuItem => ({
 const table = (editor: Editor): MenuItem => ({
   key: "table",
   type: "button",
-  title: "Table",
-  icon: "table",
+  title: strings.table(),
+  icon: Icons.table,
   menu: {
-    title: "Insert a table",
+    title: strings.insertTable(),
     items: [
       {
         key: "table-size-selector",
@@ -177,7 +210,7 @@ const table = (editor: Editor): MenuItem => ({
         component: (props) => (
           <TablePopup
             onInsertTable={(size) => {
-              editor.current
+              editor
                 ?.chain()
                 .focus()
                 .insertTable({
@@ -197,10 +230,10 @@ const table = (editor: Editor): MenuItem => ({
 const embedMobile = (editor: Editor): MenuItem => ({
   key: "embed",
   type: "button",
-  title: "Embed",
-  icon: "embed",
+  title: strings.embed(),
+  icon: Icons.embed,
   menu: {
-    title: "Insert an embed",
+    title: strings.insertEmbed(),
     items: [
       {
         key: "embed-popup",
@@ -208,10 +241,10 @@ const embedMobile = (editor: Editor): MenuItem => ({
         component: function ({ onClick }) {
           return (
             <EmbedPopup
-              title="Insert embed"
+              title={strings.insertEmbed()}
               onClose={(embed) => {
                 if (!embed) return onClick?.();
-                editor.current?.chain().insertEmbed(embed).run();
+                editor.chain().insertEmbed(embed).run();
                 onClick?.();
               }}
             />
@@ -225,17 +258,17 @@ const embedMobile = (editor: Editor): MenuItem => ({
 const embedDesktop = (editor: Editor): MenuItem => ({
   key: "embed",
   type: "button",
-  title: "Embed",
-  icon: "embed",
+  title: strings.embed(),
+  icon: Icons.embed,
   onClick: () => {
     if (!editor) return;
     showPopup({
       popup: (hide) => (
         <EmbedPopup
-          title="Insert embed"
+          title={strings.insertEmbed()}
           onClose={(embed) => {
             if (!embed) return hide();
-            editor.current?.chain().insertEmbed(embed).run();
+            editor.chain().insertEmbed(embed).run();
             hide();
           }}
         />
@@ -247,38 +280,40 @@ const embedDesktop = (editor: Editor): MenuItem => ({
 const attachment = (editor: Editor): MenuItem => ({
   key: "attachment",
   type: "button",
-  title: "Attachment",
-  icon: "attachment",
-  isChecked: editor?.isActive("attachment"),
-  onClick: () =>
-    editor.current?.chain().focus().openAttachmentPicker("file").run()
+  title: strings.attachment(),
+  icon: Icons.attachment,
+  isChecked: editor.isActive("attachment"),
+  onClick: () => editor.storage.openAttachmentPicker?.("file"),
+  modifier: "Mod-Shift-A"
 });
 
 const tasklist = (editor: Editor): MenuItem => ({
   key: "tasklist",
   type: "button",
-  title: "Task list",
-  icon: "checkbox",
-  isChecked: editor?.isActive("taskList"),
-  onClick: () => editor.current?.chain().focus().toggleTaskList().run()
+  title: strings.taskList(),
+  icon: Icons.checkbox,
+  isChecked: editor.isActive("taskList"),
+  onClick: () => editor.chain().focus().toggleTaskList().run(),
+  modifier: "Mod-Shift-T"
 });
 
 const outlinelist = (editor: Editor): MenuItem => ({
   key: "outlinelist",
   type: "button",
-  title: "Outline list",
-  icon: "outlineList",
-  isChecked: editor?.isActive("outlineList"),
-  onClick: () => editor.current?.chain().focus().toggleOutlineList().run()
+  title: strings.outlineList(),
+  icon: Icons.outlineList,
+  isChecked: editor.isActive("outlineList"),
+  onClick: () => editor.chain().focus().toggleOutlineList().run(),
+  modifier: "Mod-Shift-O"
 });
 
 const uploadImageFromURLMobile = (editor: Editor): MenuItem => ({
   key: "upload-from-url",
   type: "button",
-  title: "Attach from URL",
-  icon: "link",
+  title: strings.attachImageFromURL(),
+  icon: Icons.link,
   menu: {
-    title: "Attach image from URL",
+    title: strings.attachImageFromURL(),
     items: [
       {
         key: "attach-image",
@@ -307,8 +342,8 @@ const uploadImageFromURLMobile = (editor: Editor): MenuItem => ({
 const uploadImageFromURL = (editor: Editor): MenuItem => ({
   key: "upload-from-url",
   type: "button",
-  title: "Attach from URL",
-  icon: "link",
+  title: strings.attachImageFromURL(),
+  icon: Icons.link,
   onClick: () => {
     showPopup({
       popup: (hide) => (

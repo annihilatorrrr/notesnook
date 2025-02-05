@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,11 +17,11 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import Pricing from "../api/pricing";
+import { Pricing } from "../src/api/pricing.ts";
+import { test, expect, describe } from "vitest";
 
 test.each(["monthly", "yearly", undefined])(`get %s price`, async (period) => {
-  const pricing = new Pricing();
-  const price = await pricing.price(period);
+  const price = await Pricing.price(period);
   expect(price).toMatchSnapshot(
     {
       country: expect.any(String),
@@ -37,8 +37,7 @@ describe.each(["android", "ios", "web"])(`get %s pricing tier`, (platform) => {
   test.each(["monthly", "yearly"])(
     `get %s ${platform} tier`,
     async (period) => {
-      const pricing = new Pricing();
-      const price = await pricing.sku(platform, period);
+      const price = await Pricing.sku(platform, period);
       expect(price).toMatchSnapshot(
         {
           country: expect.any(String),

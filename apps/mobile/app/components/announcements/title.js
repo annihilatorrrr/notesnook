@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -54,7 +54,7 @@ export const Title = ({ text, style = {}, inline }) => {
       </Heading>
 
       <Button
-        type="gray"
+        type="plain"
         icon="close"
         height={null}
         onPress={() => {
@@ -67,7 +67,7 @@ export const Title = ({ text, style = {}, inline }) => {
           right: 0
         }}
         iconSize={24}
-        fontSize={SIZE.xs + 1}
+        fontSize={SIZE.xs}
         style={{
           borderRadius: 100,
           paddingVertical: 0,

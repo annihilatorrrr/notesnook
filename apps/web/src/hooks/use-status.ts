@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,14 +17,17 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import create from "zustand";
-import produce from "immer";
+import { create } from "zustand";
+import { create as produce } from "mutative";
+import { Icon } from "../components/icons";
 
 type Status = {
   key: string;
   status: string;
+  total?: number;
+  current?: number;
   progress?: number;
-  icon?: string | null;
+  icon?: Icon | null;
 };
 interface IStatusStore {
   statuses: Record<string, Status>;
@@ -35,13 +38,20 @@ interface IStatusStore {
 const useStatusStore = create<IStatusStore>((set, get) => ({
   statuses: {},
   getStatus: (key: string) => get().statuses[key],
-  updateStatus: ({ key, status, progress, icon }: Status) =>
+  updateStatus: ({ key, status, progress, icon, current, total }: Status) =>
     set(
       produce((state) => {
         if (!key) return;
         const { statuses } = state;
         const statusText = status || statuses[key]?.status;
-        statuses[key] = { key, status: statusText, progress, icon };
+        statuses[key] = {
+          current,
+          total,
+          key,
+          status: statusText,
+          progress,
+          icon
+        };
       })
     ),
   removeStatus: (key) =>
@@ -62,3 +72,12 @@ export default function useStatus() {
 export const updateStatus = useStatusStore.getState().updateStatus;
 export const removeStatus = useStatusStore.getState().removeStatus;
 export const getStatus = useStatusStore.getState().getStatus;
+
+export function statusToString(status: Status) {
+  const parts: string[] = [];
+  if (status.progress) parts.push(`${status.progress}%`);
+  parts.push(status.status);
+  if (status.total !== undefined && status.current !== undefined)
+    parts.push(`(${status.current}/${status.total})`);
+  return parts.join(" ");
+}

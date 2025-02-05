@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,41 +17,31 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { Node, mergeAttributes, findChildren, Editor } from "@tiptap/core";
+import { Node, mergeAttributes, findChildren } from "@tiptap/core";
 import { Attribute } from "@tiptap/core";
-import { createSelectionBasedNodeView } from "../react";
-import { AttachmentComponent } from "./component";
+import { createNodeView } from "../react/index.js";
+import { AttachmentComponent } from "./component.js";
+import { Attachment } from "./types.js";
 
 export type AttachmentType = "image" | "file" | "camera";
 export interface AttachmentOptions {
+  types: string[];
   HTMLAttributes: Record<string, unknown>;
-  onDownloadAttachment: (editor: Editor, attachment: Attachment) => boolean;
-  onOpenAttachmentPicker: (editor: Editor, type: AttachmentType) => boolean;
 }
-
-export type AttachmentWithProgress = AttachmentProgress & Attachment;
-
-export type Attachment = {
-  hash: string;
-  filename: string;
-  type: string;
-  size: number;
-};
-
-export type AttachmentProgress = {
-  progress: number;
-  type: "upload" | "download" | "encrypt";
-  hash: string;
-};
 
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
     attachment: {
-      openAttachmentPicker: (type: AttachmentType) => ReturnType;
       insertAttachment: (attachment: Attachment) => ReturnType;
       removeAttachment: () => ReturnType;
-      downloadAttachment: (attachment: Attachment) => ReturnType;
-      setAttachmentProgress: (progress: AttachmentProgress) => ReturnType;
+      updateAttachment: (
+        attachment: Partial<Attachment>,
+        options: {
+          preventUpdate?: boolean;
+          ignoreEdit?: boolean;
+          query: (attachment: Attachment) => boolean;
+        }
+      ) => ReturnType;
     };
   }
 }
@@ -65,9 +55,8 @@ export const AttachmentNode = Node.create<AttachmentOptions>({
 
   addOptions() {
     return {
-      HTMLAttributes: {},
-      onDownloadAttachment: () => false,
-      onOpenAttachmentPicker: () => false
+      types: [this.name],
+      HTMLAttributes: {}
     };
   },
 
@@ -79,13 +68,14 @@ export const AttachmentNode = Node.create<AttachmentOptions>({
 
   addAttributes() {
     return {
+      type: { default: "file", rendered: false },
       progress: {
         default: 0,
         rendered: false
       },
       hash: getDataAttribute("hash"),
       filename: getDataAttribute("filename"),
-      type: getDataAttribute("mime"),
+      mime: getDataAttribute("mime"),
       size: getDataAttribute("size")
     };
   },
@@ -106,10 +96,11 @@ export const AttachmentNode = Node.create<AttachmentOptions>({
   },
 
   addNodeView() {
-    return createSelectionBasedNodeView(AttachmentComponent, {
+    return createNodeView(AttachmentComponent, {
       shouldUpdate: ({ attrs: prev }, { attrs: next }) => {
         return prev.progress !== next.progress;
-      }
+      },
+      forceEnableSelection: true
     });
   },
 
@@ -117,7 +108,18 @@ export const AttachmentNode = Node.create<AttachmentOptions>({
     return {
       insertAttachment:
         (attachment) =>
-        ({ commands }) => {
+        ({ commands, state }) => {
+          const { $from } = state.selection;
+          const maybeAttachmentNode = state.doc.nodeAt($from.pos);
+          if (maybeAttachmentNode?.type === this.type) {
+            return commands.insertContentAt(
+              $from.pos + maybeAttachmentNode.nodeSize,
+              {
+                type: this.name,
+                attrs: attachment
+              }
+            );
+          }
           return commands.insertContent({
             type: this.name,
             attrs: attachment
@@ -128,37 +130,39 @@ export const AttachmentNode = Node.create<AttachmentOptions>({
         ({ commands }) => {
           return commands.deleteSelection();
         },
-      downloadAttachment:
-        (attachment) =>
-        ({ editor }) => {
-          return this.options.onDownloadAttachment(editor, attachment);
-        },
-      openAttachmentPicker:
-        (type: AttachmentType) =>
-        ({ editor }) => {
-          return this.options.onOpenAttachmentPicker(editor, type);
-        },
-      setAttachmentProgress:
-        (options) =>
+      updateAttachment:
+        (attachment, options) =>
         ({ state, tr, dispatch }) => {
-          const { hash, progress } = options;
           const attachments = findChildren(
             state.doc,
             (node) =>
-              (node.type.name === this.name || node.type.name === "image") &&
-              node.attrs.hash === hash
+              this.options.types.includes(node.type.name) &&
+              options.query(node.attrs as Attachment)
           );
-          for (const attachment of attachments) {
-            tr.setNodeMarkup(attachment.pos, attachment.node.type, {
-              ...attachment.node.attrs,
-              progress: progress === 100 ? null : progress
+          if (!attachments.length) return false;
+
+          for (const { node, pos } of attachments) {
+            const progress = attachment.progress || node.attrs.progress;
+            tr.setNodeMarkup(pos, node.type, {
+              ...node.attrs,
+              ...attachment,
+              progress:
+                progress !== undefined && progress < 100 ? progress : undefined
             });
           }
-          tr.setMeta("preventUpdate", true);
+          tr.setMeta("preventUpdate", options.preventUpdate || false);
+          tr.setMeta("ignoreEdit", options.ignoreEdit || false);
           tr.setMeta("addToHistory", false);
           if (dispatch) dispatch(tr);
           return true;
         }
+    };
+  },
+
+  addKeyboardShortcuts() {
+    return {
+      "Mod-Shift-A": () =>
+        this.editor.storage.openAttachmentPicker?.("file") || true
     };
   }
 

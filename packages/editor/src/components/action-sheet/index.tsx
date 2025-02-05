@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -24,36 +24,16 @@ import React, {
   useState,
   useEffect
 } from "react";
-import { MenuItem } from "../menu/types";
-import { Box, Button, Flex, Text, FlexProps } from "@theme-ui/components";
-import { Icon } from "../../toolbar/components/icon";
-import { Icons } from "../../toolbar/icons";
-import { MenuButton } from "../menu/menu-button";
-import { MenuSeparator } from "../menu/menu-separator";
+import { MenuItem, Icon, MenuButton, MenuSeparator } from "@notesnook/ui";
+import { Box, Button, Flex, Text } from "@theme-ui/components";
+import { Icons } from "../../toolbar/icons.js";
 import Modal from "react-modal";
-import {
-  motion,
-  PanInfo,
-  useMotionValue,
-  useTransform,
-  useAnimation
-} from "framer-motion";
-import { useTheme } from "../../toolbar/stores/toolbar-store";
-
-const AnimatedFlex = motion(
-  Flex as React.FunctionComponent<Omit<FlexProps, "onDrag" | "onDragEnd">>
-);
+import { useTheme } from "@emotion/react";
+import { EmotionThemeProvider, Theme } from "@notesnook/theme";
 
 type ActionSheetHistoryItem = {
   title?: string;
   items?: MenuItem[];
-};
-const TRANSITION = {
-  type: "spring",
-  stiffness: 300,
-  damping: 30,
-  mass: 0.2,
-  duration: 300
 };
 
 function useHistory<T>(initial: T) {
@@ -69,7 +49,6 @@ function useHistory<T>(initial: T) {
   }, [canGoBack]);
 
   const navigate = useCallback((state: T) => {
-    console.log("NAVI", state);
     setCurrent((prev) => {
       if (prev) stack.current.push(prev);
       return state;
@@ -104,27 +83,129 @@ export function ActionSheetPresenter(
     draggable = true,
     children
   } = props;
-  const theme = useTheme();
+  const theme = useTheme() as Theme;
   const contentRef = useRef<HTMLDivElement>();
+  const pressed = useRef(false);
+  const startY = useRef(0);
+  const reverse = false;
+  const threshold = 50;
+  const sheetTransition = "transform 0.3s cubic-bezier(0.25, 0.8, 0.25, 1)";
+  const animationRef = useRef(0);
+  const masterOffset = useRef(0);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
 
-  const y = useMotionValue(0);
-  const opacity = useTransform(
-    y,
-    [0, contentRef.current?.offsetHeight || window.innerHeight],
-    [1, 0]
-  );
-  const animation = useAnimation();
+  const onSwipeMove = (event: React.TouchEvent<HTMLDivElement>): void => {
+    if (pressed.current) {
+      const offset = event.touches[0].clientY - startY.current;
+      move(offset);
+    }
+  };
+
+  const onMouseMove = (
+    event: React.MouseEvent<HTMLDivElement, MouseEvent>
+  ): void => {
+    event.stopPropagation();
+    if (pressed.current) {
+      if (reverse) {
+        const offset = event.clientY - startY.current;
+        move(offset);
+      } else {
+        const offset = event.clientY - startY.current;
+        move(offset);
+      }
+    }
+  };
+
+  const move = (offset: number): boolean => {
+    if (!reverse && offset > 0) {
+      masterOffset.current = offset;
+      animationRef.current = requestAnimationFrame(updatePosition);
+      return true;
+    } else if (reverse && offset < 0) {
+      masterOffset.current = offset;
+      animationRef.current = requestAnimationFrame(updatePosition);
+      return true;
+    }
+    return false;
+  };
+
+  const updatePosition = (): boolean => {
+    if (animationRef.current !== undefined) {
+      if (sheetRef.current) {
+        sheetRef.current.style.transform = `translate3d(0, ${masterOffset.current}px, 0)`;
+        if (overlayRef.current)
+          overlayRef.current.style.opacity = `${
+            1 - masterOffset.current / sheetRef.current.offsetHeight
+          }`;
+        return true;
+      }
+      return false;
+    }
+    return false;
+  };
+
+  const onSwipeStart = (event: React.TouchEvent<HTMLDivElement>): void => {
+    if (sheetRef?.current) sheetRef.current.style.transition = "none";
+    startY.current = event.touches[0].clientY;
+    changePressed(true);
+  };
+
+  const onMouseStart = (
+    event: React.MouseEvent<HTMLDivElement, MouseEvent>
+  ): void => {
+    if (sheetRef?.current) sheetRef.current.style.transition = "none";
+    startY.current = event.clientY;
+    changePressed(true);
+  };
+
+  const changePressed = (x: boolean): void => {
+    pressed.current = x;
+  };
+
+  const requestSheetDown = React.useCallback((): boolean => {
+    if (sheetRef.current) {
+      sheetRef.current.style.transition = sheetTransition;
+      sheetRef.current.style.transform = reverse
+        ? "translate3d(0, -101%, 0)"
+        : "translate3d(0, 101%, 0)";
+      if (overlayRef.current) overlayRef.current.style.opacity = `0`;
+      return true;
+    }
+    return false;
+  }, [reverse, sheetTransition]);
+
+  const requestSheetUp = React.useCallback((): boolean => {
+    if (sheetRef.current) {
+      sheetRef.current.style.transform = `translate3d(0, 0%, 0)`;
+      if (overlayRef.current) overlayRef.current.style.opacity = `1`;
+      return true;
+    }
+    return false;
+  }, []);
+
+  const onSwipeEnd = (): void => {
+    cancelAnimationFrame(animationRef.current);
+    changePressed(false);
+    if (Math.abs(masterOffset.current) > threshold) {
+      // setShow(false);
+      requestSheetDown();
+      console.log("CLSOING", masterOffset.current);
+      setTimeout(() => {
+        if (onClose) onClose();
+      }, 300);
+    } else {
+      requestSheetUp();
+    }
+    masterOffset.current = 0;
+  };
 
   const onBeforeClose = useCallback(() => {
-    const height = contentRef.current?.offsetHeight || window.innerHeight;
+    requestSheetDown();
     setTimeout(() => {
-      onClose?.();
-    }, TRANSITION.duration - 50);
-    animation.start({
-      transition: TRANSITION,
-      y: height + 100
-    });
-  }, [animation, onClose]);
+      if (onClose) onClose();
+    }, 300);
+  }, [onClose, requestSheetDown]);
 
   const handleBackPress = useCallback(
     (event: Event) => {
@@ -161,13 +242,13 @@ export function ActionSheetPresenter(
       onRequestClose={() => onBeforeClose()}
       portalClassName={"bottom-sheet-presenter-portal"}
       onAfterOpen={() => {
-        console.log("OPEGN!");
-        animation.start({ transition: TRANSITION, y: 0 });
+        setTimeout(() => requestSheetUp());
       }}
       overlayElement={(overlayElementProps, contentEl) => {
         return (
-          <Box
+          <EmotionThemeProvider
             {...overlayElementProps}
+            scope="sheet"
             style={{
               ...overlayElementProps.style,
               position: blocking ? "fixed" : "sticky",
@@ -177,20 +258,21 @@ export function ActionSheetPresenter(
             tabIndex={-1}
           >
             {blocking && (
-              <motion.div
-                id="action-sheet-overlay"
+              <div
+                ref={overlayRef}
                 style={{
                   height: "100%",
                   width: "100%",
-                  opacity,
+                  zIndex: 1000,
+                  transition: "opacity 0.3s ease-out",
                   position: "absolute",
-                  backgroundColor: "var(--overlay)"
+                  backgroundColor: "var(--backdrop)"
                 }}
                 tabIndex={-1}
               />
             )}
             {contentEl}
-          </Box>
+          </EmotionThemeProvider>
         );
       }}
       contentElement={(props, children) => (
@@ -208,21 +290,22 @@ export function ActionSheetPresenter(
             position: "fixed",
             backgroundColor: undefined,
             padding: 0,
-            zIndex: 0,
+            zIndex: 1001,
             outline: 0,
-            isolation: "isolate"
+            isolation: "isolate",
+            userSelect: "none"
           }}
         >
           {children}
         </Box>
       )}
     >
-      <AnimatedFlex
-        animate={animation}
-        style={{ y }}
-        initial={{ y: 1000 }}
+      <Flex
+        ref={sheetRef}
         sx={{
           bg: "background",
+          transform: "translate3d(0, 101%, 0)",
+          transition: sheetTransition,
           borderTopLeftRadius: 15,
           borderTopRightRadius: 15,
           boxShadow: theme?.shadows.menu || "none",
@@ -231,30 +314,13 @@ export function ActionSheetPresenter(
         }}
       >
         {draggable && (
-          <AnimatedFlex
-            drag="y"
-            onDrag={(_, { delta }: PanInfo) => {
-              y.set(Math.max(y.get() + delta.y, 0));
-            }}
-            onDragEnd={(_, { velocity }: PanInfo) => {
-              if (velocity.y >= 500) {
-                onClose?.();
-                return;
-              }
-              const sheetEl = contentRef.current as HTMLDivElement;
-              const contentHeight = sheetEl.offsetHeight;
-              const threshold = 30;
-              const closingHeight = (contentHeight * threshold) / 100;
-
-              if (y.get() >= closingHeight) {
-                onBeforeClose();
-              } else {
-                animation.start({ transition: TRANSITION, y: 0 });
-              }
-            }}
-            dragConstraints={{ top: 0, bottom: 0 }}
-            dragMomentum={false}
-            dragElastic={false}
+          <Flex
+            onMouseDown={onMouseStart}
+            onMouseMove={onMouseMove}
+            onMouseUp={onSwipeEnd}
+            onTouchStart={onSwipeStart}
+            onTouchMove={onSwipeMove}
+            onTouchEnd={onSwipeEnd}
             sx={{
               bg: "transparent",
               alignItems: "center",
@@ -265,18 +331,18 @@ export function ActionSheetPresenter(
             <Box
               id="pill"
               sx={{
-                backgroundColor: "hover",
-                width: 60,
-                height: 8,
+                bg: "background-secondary",
+                width: 100,
+                height: 6,
                 borderRadius: 100
               }}
             />
-          </AnimatedFlex>
+          </Flex>
         )}
         <ContentContainer items={items} title={title} onClose={onClose}>
           {children}
         </ContentContainer>
-      </AnimatedFlex>
+      </Flex>
     </Modal>
   );
 }

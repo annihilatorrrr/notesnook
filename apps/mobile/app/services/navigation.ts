@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -21,19 +21,18 @@ import { StackActions } from "@react-navigation/native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { useFavoriteStore } from "../stores/use-favorite-store";
 import useNavigationStore, {
-  CurrentScreen,
   GenericRouteParam,
   RouteName,
   RouteParams
 } from "../stores/use-navigation-store";
 import { useNotebookStore } from "../stores/use-notebook-store";
 import { useNoteStore } from "../stores/use-notes-store";
+import { useReminderStore } from "../stores/use-reminder-store";
 import { useTagStore } from "../stores/use-tag-store";
 import { useTrashStore } from "../stores/use-trash-store";
-import { eOnNewTopicAdded } from "../utils/events";
+import { eOnRefreshSearch, eUpdateNotebookRoute } from "../utils/events";
 import { rootNavigatorRef, tabBarRef } from "../utils/global-refs";
 import { eSendEvent } from "./event-manager";
-import SettingsService from "./settings";
 
 /**
  * Routes that should be updated on focus
@@ -59,7 +58,8 @@ const routeNames = {
   Welcome: "Welcome",
   AppLock: "AppLock",
   Login: "Login",
-  Signup: "Signup"
+  Signup: "Signup",
+  Reminders: "Reminders"
 };
 
 export type NavigationProps<T extends RouteName> = NativeStackScreenProps<
@@ -73,17 +73,19 @@ export type NavigationProps<T extends RouteName> = NativeStackScreenProps<
 const routeUpdateFunctions: {
   [name: string]: (...params: GenericRouteParam[]) => void;
 } = {
-  Notes: () => useNoteStore.getState().setNotes(),
-  Notebooks: () => useNotebookStore.getState().setNotebooks(),
-  Tags: () => useTagStore.getState().setTags(),
-  Favorites: () => useFavoriteStore.getState().setFavorites(),
-  Trash: () => useTrashStore.getState().setTrash(),
-  Notebook: (params) => eSendEvent(eOnNewTopicAdded, params),
+  Notes: () => useNoteStore.getState().refresh(),
+  Notebooks: () => useNotebookStore.getState().refresh(),
+  Tags: () => useTagStore.getState().refresh(),
+  Favorites: () => useFavoriteStore.getState().refresh(),
+  Trash: () => useTrashStore.getState().refresh(),
+  Notebook: (params) => eSendEvent(eUpdateNotebookRoute, params),
   NotesPage: (params) => eSendEvent("NotesPage", params),
   TaggedNotes: (params) => eSendEvent("TaggedNotes", params),
   ColoredNotes: (params) => eSendEvent("ColoredNotes", params),
   TopicNotes: (params) => eSendEvent("TopicNotes", params),
-  Monographs: (params) => eSendEvent("Monographs", params)
+  Monographs: (params) => eSendEvent("Monographs", params),
+  Reminders: () => useReminderStore.getState().refresh(),
+  Search: () => eSendEvent(eOnRefreshSearch)
 };
 
 function clearRouteFromQueue(routeName: RouteName) {
@@ -103,66 +105,40 @@ function routeNeedsUpdate(routeName: RouteName, callback: () => void) {
   }
 }
 
-function queueRoutesForUpdate(...routes: RouteName[]) {
-  const currentScreen = useNavigationStore.getState().currentScreen;
-  // const routeHistory = rootNavigatorRef.current?.getRootState()?.routes || [
-  //   { key: currentScreen.name }
-  // ];
-
-  // filter out routes that are not rendered to prevent unnecessary updates
-  // routes = routes.filter(
-  //   routeName => routeHistory?.findIndex(route => route.key?.startsWith(routeName)) > -1
-  // );
-
-  if (routes.indexOf(currentScreen.name) > -1) {
-    routeUpdateFunctions[currentScreen.name]();
-    clearRouteFromQueue(currentScreen.name);
+function queueRoutesForUpdate(...routesToUpdate: RouteName[]) {
+  const routes =
+    routesToUpdate?.length > 0
+      ? routesToUpdate
+      : (Object.keys(routeNames) as (keyof RouteParams)[]);
+  const currentRoute = useNavigationStore.getState().currentRoute;
+  if (routes.indexOf(currentRoute) > -1) {
+    routeUpdateFunctions[currentRoute]?.();
+    clearRouteFromQueue(currentRoute);
     // Remove focused screen from queue
-    routes.splice(routes.indexOf(currentScreen.name), 1);
-    routesUpdateQueue.splice(routesUpdateQueue.indexOf(currentScreen.name), 1);
+    routes.splice(routes.indexOf(currentRoute), 1);
   }
-
   routesUpdateQueue = routesUpdateQueue.concat(routes);
   routesUpdateQueue = [...new Set(routesUpdateQueue)];
 }
 
-function navigate<T extends RouteName>(
-  screen: CurrentScreen,
-  params: RouteParams[T]
-) {
-  useNavigationStore.getState().update(screen, !!params?.canGoBack);
-  if (screen.name === "Notebook") routeUpdateFunctions["Notebook"](params);
-  if (screen.name.endsWith("Notes") && screen.name !== "Notes")
-    routeUpdateFunctions[screen.name](params);
-  //@ts-ignore Not sure how to fix this for now ignore it.
-  rootNavigatorRef.current?.navigate<RouteName>(screen.name, params);
+function navigate<T extends RouteName>(screen: T, params?: RouteParams[T]) {
+  rootNavigatorRef.current?.navigate(screen as any, params);
 }
 
 function goBack() {
   rootNavigatorRef.current?.goBack();
 }
 
-function push<T extends RouteName>(
-  screen: CurrentScreen,
-  params: RouteParams[T]
-) {
-  useNavigationStore.getState().update(screen, !!params.canGoBack);
-  rootNavigatorRef.current?.dispatch(StackActions.push(screen.name, params));
+function push<T extends RouteName>(screen: T, params: RouteParams[T]) {
+  rootNavigatorRef.current?.dispatch(StackActions.push(screen as any, params));
 }
 
-function replace<T extends RouteName>(
-  screen: CurrentScreen,
-  params: RouteParams[T]
-) {
-  useNavigationStore.getState().update(screen, !!params?.canGoBack);
-  rootNavigatorRef.current?.dispatch(StackActions.replace(screen.name, params));
+function replace<T extends RouteName>(screen: T, params: RouteParams[T]) {
+  rootNavigatorRef.current?.dispatch(StackActions.replace(screen, params));
 }
 
 function popToTop() {
   rootNavigatorRef.current?.dispatch(StackActions.popToTop());
-  useNavigationStore.getState().update({
-    name: (SettingsService.get().homepage as RouteName) || "Notes"
-  });
 }
 
 function openDrawer() {

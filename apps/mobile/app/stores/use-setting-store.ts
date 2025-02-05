@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,12 +17,21 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { Dimensions } from "react-native";
+import { Dimensions, PlatformOSType } from "react-native";
 import Config from "react-native-config";
+import { Sound } from "react-native-notification-sounds";
+import { initialWindowMetrics } from "react-native-safe-area-context";
 import { FileType } from "react-native-scoped-storage";
 import create, { State } from "zustand";
-import { ACCENT } from "../utils/color-scheme";
-import { initialWindowMetrics } from "react-native-safe-area-context";
+import { ThemeDark, ThemeLight, ThemeDefinition } from "@notesnook/theme";
+import { Reminder } from "@notesnook/core";
+export const HostIds = [
+  "API_HOST",
+  "AUTH_HOST",
+  "SSE_HOST",
+  "MONOGRAPH_HOST"
+] as const;
+export type HostId = (typeof HostIds)[number];
 
 export type Settings = {
   showToolbarOnTop?: boolean;
@@ -30,15 +39,17 @@ export type Settings = {
   fontScale?: number;
   forcePortraitOnTablet?: boolean;
   useSystemTheme?: boolean;
-  reminder?: string;
+  reminder: "daily" | "off" | "useroff" | "weekly" | "monthly";
+  fullBackupReminder: "never" | "weekly" | "monthly";
   encryptedBackup?: boolean;
   homepage?: string;
   sort?: string;
   sortOrder?: string;
   screenshotMode?: boolean;
   privacyScreen?: boolean;
-  appLockMode?: string;
-  telemetry?: boolean;
+  appLockTimer: number;
+  appLockEnabled?: boolean;
+  appLockMode?: "none" | "background" | "launch";
   notebooksListMode?: "normal" | "compact";
   notesListMode?: "normal" | "compact";
   devMode?: boolean;
@@ -48,14 +59,10 @@ export type Settings = {
   rateApp?: boolean | number;
   migrated?: boolean;
   introCompleted?: boolean;
-  nextBackupRequestTime?: number | undefined;
-  lastBackupDate?: number | undefined;
+  nextBackupRequestTime?: number;
+  lastBackupDate?: number;
   userEmailConfirmed?: boolean;
   recoveryKeySaved?: boolean;
-  theme: {
-    accent: string;
-    dark: boolean;
-  };
   backupDirectoryAndroid?: FileType | null;
   showBackupCompleteSheet: boolean;
   lastRecoveryEmailTime?: number;
@@ -63,6 +70,29 @@ export type Settings = {
   sessionExpired: boolean;
   version: string | null;
   doubleSpacedLines?: boolean;
+  disableAutoSync?: boolean;
+  disableSync?: boolean;
+  reminderNotifications?: boolean;
+  defaultSnoozeTime?: string;
+  reminderNotificationMode: Reminder["priority"];
+  corsProxy: string;
+  disableRealtimeSync?: boolean;
+  notificationSound?: Sound & { platform: PlatformOSType };
+  defaultFontSize: number;
+  defaultFontFamily: string;
+  colorScheme: "dark" | "light";
+  lighTheme: ThemeDefinition;
+  darkTheme: ThemeDefinition;
+  markdownShortcuts?: boolean;
+  appLockHasPasswordSecurity?: boolean;
+  biometricsAuthEnabled?: boolean;
+  backgroundSync?: boolean;
+  applockKeyboardType: "numeric" | "default";
+  settingsVersion?: number;
+  backupType: "full" | "partial";
+  offlineMode?: boolean;
+  lastFullBackupDate?: number;
+  serverUrls?: Record<HostId, string>;
 };
 
 type DimensionsType = {
@@ -86,71 +116,116 @@ export interface SettingStore extends State {
   setFullscreen: (fullscreen: boolean) => void;
   setDeviceMode: (mode: string) => void;
   setDimensions: (dimensions: DimensionsType) => void;
-  appLoading: boolean;
-  setAppLoading: (appLoading: boolean) => void;
+  isAppLoading: boolean;
+  setAppLoading: (isAppLoading: boolean) => void;
   setSheetKeyboardHandler: (sheetKeyboardHandler: boolean) => void;
   sheetKeyboardHandler: boolean;
   requestBiometrics: boolean;
   setRequestBiometrics: (requestBiometrics: boolean) => void;
+  appDidEnterBackgroundForAction: boolean;
+  setAppDidEnterBackgroundForAction: (value: boolean) => void;
   insets: Insets;
   setInsets: (insets: Insets) => void;
+  timeFormat: string;
+  dateFormat: string;
+  dbPassword?: string;
+  isOldAppLock: () => boolean;
 }
 
 const { width, height } = Dimensions.get("window");
 
-export const useSettingStore = create<SettingStore>((set) => ({
-  settings: {
-    showToolbarOnTop: false,
-    showKeyboardOnOpen: false,
-    fontScale: 1,
-    forcePortraitOnTablet: false,
-    useSystemTheme: false,
-    reminder: "off",
-    encryptedBackup: false,
-    homepage: "Notes",
-    sort: "default",
-    sortOrder: "desc",
-    screenshotMode: true,
-    privacyScreen: false,
-    appLockMode: "none",
-    telemetry: true,
-    notebooksListMode: "normal",
-    notesListMode: "normal",
-    devMode: false,
-    notifNotes: false,
-    pitchBlack: false,
-    reduceAnimations: false,
-    rateApp: false,
-    migrated: false,
-    introCompleted: Config.isTesting ? true : false,
-    nextBackupRequestTime: undefined,
-    lastBackupDate: undefined,
-    userEmailConfirmed: false,
-    recoveryKeySaved: false,
-    theme: {
-      accent: ACCENT?.color,
-      dark: false
-    },
-    showBackupCompleteSheet: true,
-    sessionExpired: false,
-    version: null,
-    doubleSpacedLines: true
-  },
+export const defaultSettings: SettingStore["settings"] = {
+  applockKeyboardType: "numeric",
+  appLockTimer: 0,
+  showToolbarOnTop: false,
+  disableAutoSync: false,
+  disableRealtimeSync: false,
+  disableSync: false,
+  appLockEnabled: false,
+  backupDirectoryAndroid: null,
+  offlineMode: false,
+  showKeyboardOnOpen: false,
+  fontScale: 1,
+  forcePortraitOnTablet: false,
+  useSystemTheme: true,
+  reminder: "off",
+  encryptedBackup: false,
+  homepage: "Notes",
+  sort: "default",
+  sortOrder: "desc",
+  screenshotMode: true,
+  privacyScreen: false,
+  appLockMode: "none",
+  notebooksListMode: "normal",
+  notesListMode: "normal",
+  devMode: false,
+  notifNotes: false,
+  pitchBlack: false,
+  reduceAnimations: false,
+  rateApp: false,
+  migrated: false,
+  introCompleted: Config.isTesting ? true : false,
+  nextBackupRequestTime: undefined,
+  lastBackupDate: 0,
+  userEmailConfirmed: false,
+  recoveryKeySaved: false,
+  showBackupCompleteSheet: true,
+  sessionExpired: false,
+  version: null,
+  doubleSpacedLines: true,
+  reminderNotifications: true,
+  defaultSnoozeTime: "5",
+  corsProxy: "https://cors.notesnook.com",
+  reminderNotificationMode: "urgent",
+  notificationSound: undefined,
+  defaultFontFamily: "sans-serif",
+  defaultFontSize: 16,
+  colorScheme: "light",
+  lighTheme: ThemeLight,
+  darkTheme: ThemeDark,
+  markdownShortcuts: true,
+  biometricsAuthEnabled: false,
+  appLockHasPasswordSecurity: false,
+  backgroundSync: true,
+  settingsVersion: 0,
+  backupType: "partial",
+  fullBackupReminder: "never",
+  lastFullBackupDate: 0
+};
+
+export const useSettingStore = create<SettingStore>((set, get) => ({
+  dbPassword: undefined,
+  settings: { ...defaultSettings },
   sheetKeyboardHandler: true,
   fullscreen: false,
-  deviceMode: "mobile",
+  deviceMode: null,
   dimensions: { width, height },
-  appLoading: true,
+  isAppLoading: true,
   setSettings: (settings) => set({ settings }),
   setFullscreen: (fullscreen) => set({ fullscreen }),
   setDeviceMode: (mode) => set({ deviceMode: mode }),
   setDimensions: (dimensions) => set({ dimensions: dimensions }),
-  setAppLoading: (appLoading) => set({ appLoading }),
+  setAppLoading: (isAppLoading) => set({ isAppLoading }),
   setSheetKeyboardHandler: (sheetKeyboardHandler) =>
     set({ sheetKeyboardHandler }),
   requestBiometrics: false,
   setRequestBiometrics: (requestBiometrics) => set({ requestBiometrics }),
   setInsets: (insets) => set({ insets }),
+  timeFormat: "12-hour",
+  dateFormat: "DD-MM-YYYY",
+  setAppDidEnterBackgroundForAction: (value: boolean) => {
+    set({
+      appDidEnterBackgroundForAction: value
+    });
+  },
+  appDidEnterBackgroundForAction: false,
+  isOldAppLock: () => {
+    return (
+      get().settings.appLockHasPasswordSecurity === undefined &&
+      get().settings.biometricsAuthEnabled === undefined &&
+      get().settings.appLockMode !== "none"
+    );
+  },
   insets: initialWindowMetrics?.insets
     ? initialWindowMetrics.insets
     : { top: 0, right: 0, left: 0, bottom: 0 }

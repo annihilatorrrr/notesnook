@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,13 +17,16 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+import { getFormattedDate } from "@notesnook/common";
+import { useThemeColors } from "@notesnook/theme";
 import KeepAwake from "@sayem314/react-native-keep-awake";
 import React, { useEffect, useRef, useState } from "react";
-import { Modal, SafeAreaView, Text, View } from "react-native";
+import { SafeAreaView, Text, View } from "react-native";
 import Animated from "react-native-reanimated";
 import { db } from "../../common/database";
 import useGlobalSafeAreaInsets from "../../hooks/use-global-safe-area-insets";
-import Editor from "../../screens/editor";
+import { ReadonlyEditor } from "../../screens/editor/readonly-editor";
+import { useTabStore } from "../../screens/editor/tiptap/use-tab-store";
 import { editorController } from "../../screens/editor/tiptap/utils";
 import { DDS } from "../../services/device-detection";
 import {
@@ -33,11 +36,9 @@ import {
 } from "../../services/event-manager";
 import Navigation from "../../services/navigation";
 import Sync from "../../services/sync";
-import { useThemeStore } from "../../stores/use-theme-store";
-import { dHeight } from "../../utils";
+import { useSettingStore } from "../../stores/use-setting-store";
 import { eOnLoadNote, eShowMergeDialog } from "../../utils/events";
 import { SIZE } from "../../utils/size";
-import { timeConverter } from "../../utils/time";
 import BaseDialog from "../dialog/base-dialog";
 import DialogButtons from "../dialog/dialog-buttons";
 import DialogContainer from "../dialog/dialog-container";
@@ -46,9 +47,11 @@ import { Button } from "../ui/button";
 import { IconButton } from "../ui/icon-button";
 import Seperator from "../ui/seperator";
 import Paragraph from "../ui/typography/paragraph";
+import { diff } from "diffblazer";
+import { strings } from "@notesnook/intl";
 
 const MergeConflicts = () => {
-  const colors = useThemeStore((state) => state.colors);
+  const { colors } = useThemeColors();
   const [visible, setVisible] = useState(false);
   const [keep, setKeep] = useState(null);
   const [copy, setCopy] = useState(null);
@@ -57,10 +60,11 @@ const MergeConflicts = () => {
   const content = useRef(null);
   const isKeepingConflicted = !keep?.conflicted;
   const isKeeping = !!keep;
+  const { height } = useSettingStore((state) => state.dimensions);
 
   const applyChanges = async () => {
     let _content = keep;
-    let note = db.notes.note(_content.noteId).data;
+    let note = await db.notes.note(_content.noteId);
     await db.notes.add({
       id: note.id,
       conflicted: false,
@@ -85,17 +89,12 @@ const MergeConflicts = () => {
         }
       });
     }
-    Navigation.queueRoutesForUpdate(
-      "Notes",
-      "Favorites",
-      "ColoredNotes",
-      "TaggedNotes",
-      "TopicNotes"
-    );
-    if (editorController.current?.note?.id === note.id) {
+    Navigation.queueRoutesForUpdate();
+
+    if (useTabStore.getState().getCurrentNoteId() === note.id) {
       // reload the note in editor
       eSendEvent(eOnLoadNote, {
-        ...editorController.current?.note,
+        item: editorController.current.note.current[note.id],
         forced: true
       });
     }
@@ -104,7 +103,7 @@ const MergeConflicts = () => {
   };
 
   const show = async (item) => {
-    let noteContent = await db.content.raw(item.contentId);
+    let noteContent = await db.content.get(item.contentId);
     content.current = { ...noteContent };
     if (__DEV__) {
       if (!noteContent.conflicted) {
@@ -156,23 +155,31 @@ const MergeConflicts = () => {
           }}
         >
           {back && (
-            <IconButton onPress={close} color={colors.pri} name="arrow-left" />
+            <IconButton
+              onPress={close}
+              color={colors.primary.paragraph}
+              name="arrow-left"
+            />
           )}
           <Paragraph
             style={{ flexWrap: "wrap" }}
-            color={colors.icon}
+            color={colors.secondary.paragraph}
             size={SIZE.xs}
           >
             <Text
               style={{
-                color: isCurrent ? colors.accent : colors.red,
+                color: isCurrent ? colors.primary.accent : colors.static.red,
                 fontWeight: "bold"
               }}
             >
-              {isCurrent ? "(This Device)" : "(Incoming)"}
+              (
+              {isCurrent
+                ? strings.mergeConflict.thisDevice()
+                : strings.mergeConflict.otherDevice()}
+              )
             </Text>
             {"\n"}
-            {timeConverter(contentToKeep?.dateEdited)}
+            {getFormattedDate(contentToKeep?.dateEdited)}
           </Paragraph>
         </View>
 
@@ -189,8 +196,8 @@ const MergeConflicts = () => {
                 setCopy(contentToKeep);
                 setDialogVisible(true);
               }}
-              title="Save a copy"
-              type="grayBg"
+              title={strings.saveACopy()}
+              type="secondary"
               height={30}
               style={{
                 borderRadius: 100,
@@ -202,17 +209,19 @@ const MergeConflicts = () => {
           <View style={{ width: 10 }} />
           {isDiscarded ? (
             <Button
-              title="Discard"
+              title={strings.discard()}
               type="accent"
-              accentColor="red"
+              buttonType={{
+                color: colors.static.red,
+                text: colors.static.white
+              }}
               height={30}
               style={{
                 borderRadius: 100,
                 paddingHorizontal: 12
               }}
               fontSize={SIZE.xs}
-              accentText="light"
-              color={colors.errorText}
+              color={colors.error.paragraph}
               onPress={() => {
                 setDialogVisible(true);
               }}
@@ -230,7 +239,9 @@ const MergeConflicts = () => {
                 }}
                 type="accent"
                 fontSize={SIZE.xs}
-                title={keeping && !isDiscarded ? "Undo" : "Keep"}
+                title={
+                  keeping && !isDiscarded ? strings.undo() : strings.keep()
+                }
                 onPress={() => {
                   setKeep(keeping && !isDiscarded ? null : contentToKeep);
                 }}
@@ -243,13 +254,17 @@ const MergeConflicts = () => {
   };
 
   return !visible ? null : (
-    <Modal
+    <BaseDialog
       statusBarTranslucent
       transparent={false}
       animationType="slide"
+      animated={false}
+      bounce={false}
       onRequestClose={() => {
         close();
       }}
+      centered={false}
+      background={colors?.primary.background}
       supportedOrientations={[
         "portrait",
         "portrait-upside-down",
@@ -261,7 +276,7 @@ const MergeConflicts = () => {
     >
       <SafeAreaView
         style={{
-          backgroundColor: colors.bg,
+          backgroundColor: colors.primary.background,
           paddingTop: insets.top
         }}
       >
@@ -269,11 +284,7 @@ const MergeConflicts = () => {
         {dialogVisible && (
           <BaseDialog visible={true}>
             <DialogContainer>
-              <DialogHeader
-                title="Apply Changes"
-                paragraph="Apply selected changes to note?"
-                padding={12}
-              />
+              <DialogHeader title={strings.applyChanges()} padding={12} />
               <Seperator />
               <DialogButtons
                 positiveTitle="Apply"
@@ -302,26 +313,23 @@ const MergeConflicts = () => {
 
           <Animated.View
             style={{
-              height: dHeight / 2 - (50 + insets.top / 2),
-              backgroundColor: colors.bg,
+              height: height / 2 - (50 + insets.top / 2),
+              backgroundColor: colors.primary.background,
               borderBottomWidth: 1,
-              borderBottomColor: colors.nav
+              borderBottomColor: colors.primary.border
             }}
           >
-            <Editor
-              noHeader
-              noToolbar
-              readonly
-              editorId=":conflictPrimary"
-              onLoad={() => {
-                const note = db.notes.note(content.current?.noteId)?.data;
+            <ReadonlyEditor
+              editorId="conflictPrimary"
+              onLoad={async (loadContent) => {
+                const note = await db.notes.note(content.current?.noteId);
                 if (!note) return;
-                eSendEvent(eOnLoadNote + ":conflictPrimary", {
-                  ...note,
-                  content: {
-                    ...content.current,
-                    isPreview: true
-                  }
+                loadContent({
+                  id: note.id,
+                  data: diff(
+                    content.current.conflicted.data,
+                    content.current.data
+                  )
                 });
               }}
             />
@@ -337,29 +345,26 @@ const MergeConflicts = () => {
 
           <Animated.View
             style={{
-              height: dHeight / 2 - (50 + insets.top / 2),
-              backgroundColor: colors.bg,
+              height: height / 2 - (50 + insets.top / 2),
+              backgroundColor: colors.primary.background,
               borderRadius: 10
             }}
           >
-            <Editor
-              noHeader
-              noToolbar
-              readonly
-              editorId=":conflictSecondary"
-              onLoad={() => {
-                const note = db.notes.note(content.current?.noteId)?.data;
+            <ReadonlyEditor
+              editorId="conflictSecondary"
+              onLoad={async (loadContent) => {
+                const note = await db.notes.note(content.current?.noteId);
                 if (!note) return;
-                eSendEvent(eOnLoadNote + ":conflictSecondary", {
-                  ...note,
-                  content: { ...content.current.conflicted, isPreview: true }
+                loadContent({
+                  id: note.id,
+                  data: content.current.conflicted.data
                 });
               }}
             />
           </Animated.View>
         </View>
       </SafeAreaView>
-    </Modal>
+    </BaseDialog>
   );
 };
 

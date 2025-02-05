@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -20,12 +20,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 import { Input } from "@theme-ui/components";
 import { useState } from "react";
 import { Flex, Text } from "@theme-ui/components";
-import { ImageAttributes } from "../../extensions/image";
-import { Popup } from "../components/popup";
-import { downloadImage, toDataURL } from "../../utils/downloader";
+import { ImageAttributes } from "../../extensions/image/index.js";
+import { Popup } from "../components/popup.js";
+import { downloadImage, toDataURL } from "../../utils/downloader.js";
+import { useToolbarStore } from "../stores/toolbar-store.js";
+import { strings } from "@notesnook/intl";
 
 export type ImageUploadPopupProps = {
-  onInsert: (image: ImageAttributes) => void;
+  onInsert: (image: Partial<ImageAttributes>) => void;
   onClose: () => void;
 };
 export function ImageUploadPopup(props: ImageUploadPopupProps) {
@@ -33,22 +35,25 @@ export function ImageUploadPopup(props: ImageUploadPopupProps) {
   const [isDownloading, setIsDownloading] = useState(false);
   const [error, setError] = useState<string>();
   const [url, setUrl] = useState<string>("");
+  const downloadOptions = useToolbarStore((store) => store.downloadOptions);
 
   return (
     <Popup
-      title="Insert image from URL"
+      title={strings.attachImageFromURL()}
       onClose={onClose}
       action={{
         loading: isDownloading,
-        title: "Insert image",
+        title: strings.insert(),
         disabled: !url,
         onClick: async () => {
           setIsDownloading(true);
           setError(undefined);
 
           try {
-            const { blob, size, type } = await downloadImage(url);
-            onInsert({ src: await toDataURL(blob), size, type });
+            const image = await downloadImage(url, downloadOptions);
+            if (!image) return;
+            const { blob, size, mimeType } = image;
+            onInsert({ src: await toDataURL(blob), size, mime: mimeType });
           } catch (e) {
             if (e instanceof Error) setError(e.message);
           } finally {
@@ -61,7 +66,7 @@ export function ImageUploadPopup(props: ImageUploadPopupProps) {
         <Input
           type="url"
           autoFocus
-          placeholder="Paste Image URL here"
+          placeholder={strings.pasteImageURL()}
           value={url}
           onChange={(e) => {
             setUrl(e.target.value);
@@ -73,7 +78,7 @@ export function ImageUploadPopup(props: ImageUploadPopupProps) {
           <Text
             variant={"error"}
             sx={{
-              bg: "errorBg",
+              bg: "var(--background-error)",
               mt: 1,
               p: 1,
               borderRadius: "default"
@@ -86,7 +91,7 @@ export function ImageUploadPopup(props: ImageUploadPopupProps) {
             variant={"subBody"}
             sx={{
               bg: "shade",
-              color: "primary",
+              color: "accent",
               mt: 1,
               p: 1,
               borderRadius: "default"

@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,17 +17,17 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { Text } from "@theme-ui/components";
-import { Icon } from "./icon";
-import { Icons } from "../icons";
-// import { MenuPresenter, MenuPresenterProps } from "../../components/menu/menu";
-import { MenuItem } from "../../components/menu/types";
-import { useIsMobile, useToolbarLocation } from "../stores/toolbar-store";
-import { MenuPresenter } from "../../components/menu";
-import { getToolbarElement } from "../utils/dom";
-import { Button } from "../../components/button";
-import { usePopupHandler } from "../../components/popup-presenter";
+import { Icon, MenuItem, MenuPresenter } from "@notesnook/ui";
+import { Icons } from "../icons.js";
+import {
+  useIsMobile,
+  usePopupManager,
+  useToolbarLocation
+} from "../stores/toolbar-store.js";
+import { getToolbarElement } from "../utils/dom.js";
+import { Button } from "../../components/button.js";
 
 type DropdownProps = {
   id: string;
@@ -36,25 +36,21 @@ type DropdownProps = {
   items: MenuItem[];
   buttonRef?: React.MutableRefObject<HTMLButtonElement | undefined>;
   menuWidth?: number;
+  disabled?: boolean;
 };
 export function Dropdown(props: DropdownProps) {
-  const { id, group, items, selectedItem, buttonRef, menuWidth } = props;
+  const { id, group, items, selectedItem, buttonRef, menuWidth, disabled } =
+    props;
   const internalRef = useRef<HTMLButtonElement>();
-  const [isOpen, setIsOpen] = useState(false);
   const toolbarLocation = useToolbarLocation();
   const isMobile = useIsMobile();
   const isBottom = toolbarLocation === "bottom";
-
-  const { closePopup, isPopupOpen } = usePopupHandler({
-    group,
-    id,
-    isOpen,
-    onClosed: () => setIsOpen(false)
-  });
+  const { isOpen, toggle, close } = usePopupManager({ group, id });
 
   return (
     <>
       <Button
+        variant="secondary"
         ref={(ref) => {
           internalRef.current = ref || undefined;
           if (buttonRef) buttonRef.current = ref || undefined;
@@ -62,36 +58,57 @@ export function Dropdown(props: DropdownProps) {
         sx={{
           p: 1,
           m: 0,
-          bg: isPopupOpen ? "hover" : "transparent",
-          mr: 1,
+          bg: isOpen ? "hover" : "transparent",
+          height: "100%",
+          flexShrink: 0,
           display: "flex",
           alignItems: "center",
-          ":hover": { bg: "hover" },
           ":last-of-type": {
             mr: 0
-          }
+          },
+          ":hover:not(:disabled):not(:active)": !isMobile
+            ? undefined
+            : {
+                bg: "transparent"
+              }
         }}
-        onClick={() => setIsOpen((s) => !s)}
+        disabled={disabled}
+        onClick={toggle}
         onMouseDown={(e) => e.preventDefault()}
       >
         {typeof selectedItem === "string" ? (
-          <Text sx={{ fontSize: "subBody", mr: 1, color: "text" }}>
+          <Text
+            sx={{
+              fontSize: "subBody",
+              mr: 1,
+              color: isOpen ? "accent" : "paragraph",
+              flexShrink: 0
+            }}
+          >
             {selectedItem}
           </Text>
         ) : (
           selectedItem
         )}
         <Icon
-          path={isBottom ? Icons.chevronUp : Icons.chevronDown}
+          path={
+            isBottom
+              ? isOpen
+                ? Icons.chevronDown
+                : Icons.chevronUp
+              : isOpen
+              ? Icons.chevronUp
+              : Icons.chevronDown
+          }
+          color={isOpen ? "accent" : "paragraph"}
           size={"small"}
-          color={"text"}
         />
       </Button>
 
       <MenuPresenter
-        isOpen={isPopupOpen}
+        isOpen={isOpen}
         items={items}
-        onClose={() => closePopup(id)}
+        onClose={close}
         position={{
           target: isBottom
             ? getToolbarElement()
@@ -103,6 +120,11 @@ export function Dropdown(props: DropdownProps) {
         }}
         blocking={!isMobile}
         focusOnRender={!isMobile}
+        onMouseDown={(e) => {
+          if (globalThis.keyboardShown) {
+            e.preventDefault();
+          }
+        }}
         sx={{
           minWidth: menuWidth,
           maxWidth: isBottom ? "95vw" : "auto",

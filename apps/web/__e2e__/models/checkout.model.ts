@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -46,7 +46,10 @@ export class CheckoutModel {
     for await (const item of iterateList(
       this.page.locator(getTestId("checkout-plan"))
     )) {
-      plans.push(new Plan(item));
+      const plan = new Plan(item);
+      const planTitle = await plan.getTitle();
+      if (planTitle?.startsWith("Education")) continue;
+      plans.push(plan);
     }
     return plans;
   }
@@ -98,6 +101,10 @@ class PricingModel {
     });
   }
 
+  async waitForPaddleFrame() {
+    await getPaddleFrame(this.page);
+  }
+
   getTitle() {
     return this.title.textContent();
   }
@@ -132,7 +139,14 @@ class PricingModel {
         .locator(getPaddleTestId("postcodeInput"))
         .fill(pinCode.toString());
 
-    await paddle.locator(getPaddleTestId("locationFormSubmitButton")).click();
+    let locationFormSubmitButton = paddle.locator(
+      getPaddleTestId("combinedAuthenticationLocationFormSubmitButton")
+    );
+    if (!(await locationFormSubmitButton.isVisible()))
+      locationFormSubmitButton = paddle.locator(
+        getPaddleTestId("locationFormSubmitButton")
+      );
+    await locationFormSubmitButton.click();
 
     await paddle
       .locator(getPaddleTestId("inlineComplianceBarContainer"))

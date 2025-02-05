@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,89 +17,102 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import React from "react";
-import { db } from "../../common/database";
+import React, { useEffect } from "react";
+import { Config } from "react-native-config";
 import { FloatingButton } from "../../components/container/floating-button";
 import DelayLayout from "../../components/delay-layout";
-import { AddNotebookEvent } from "../../components/dialog-provider/recievers";
+import { Header } from "../../components/header";
 import List from "../../components/list";
+import SelectionHeader from "../../components/selection-header";
+import { AddNotebookSheet } from "../../components/sheets/add-notebook";
 import { Walkthrough } from "../../components/walkthroughs";
 import { useNavigationFocus } from "../../hooks/use-navigation-focus";
 import Navigation, { NavigationProps } from "../../services/navigation";
-import SearchService from "../../services/search";
 import SettingsService from "../../services/settings";
 import useNavigationStore from "../../stores/use-navigation-store";
-import { useNotebookStore } from "../../stores/use-notebook-store";
-const onPressFloatingButton = () => {
-  AddNotebookEvent();
-};
+import { useNotebooks } from "../../stores/use-notebook-store";
+import { strings } from "@notesnook/intl";
 
-const prepareSearch = () => {
-  SearchService.update({
-    placeholder: "Type a keyword to search in notebooks",
-    type: "notebooks",
-    title: "Notebooks",
-    get: () => db.notebooks?.all
-  });
-};
-
-const PLACEHOLDER_DATA = {
-  heading: "Your notebooks",
-  paragraph: "You have not added any notebooks yet.",
-  button: "Add your first notebook",
-  action: onPressFloatingButton,
-  loading: "Loading your notebooks"
+const onButtonPress = () => {
+  AddNotebookSheet.present();
 };
 
 export const Notebooks = ({
   navigation,
   route
 }: NavigationProps<"Notebooks">) => {
-  const notebooks = useNotebookStore((state) => state.notebooks);
+  const [notebooks, loading] = useNotebooks();
+
   const isFocused = useNavigationFocus(navigation, {
     onFocus: (prev) => {
       Navigation.routeNeedsUpdate(
         route.name,
         Navigation.routeUpdateFunctions[route.name]
       );
-      useNavigationStore.getState().update({
-        name: route.name
-      });
-      SearchService.prepareSearch = prepareSearch;
-      useNavigationStore.getState().setButtonAction(onPressFloatingButton);
-      //@ts-ignore need to update typings in core to fix this
-      if (db.notebooks.all.length === 0) {
-        Walkthrough.present("notebooks");
-      } else {
-        Walkthrough.update("notebooks");
-      }
-
-      return !prev?.current;
+      useNavigationStore.getState().setFocusedRouteId(route.name);
+      return false;
     },
     onBlur: () => false,
     delay: SettingsService.get().homepage === route.name ? 1 : -1
   });
 
-  return (
-    <DelayLayout>
-      <List
-        listData={notebooks}
-        type="notebooks"
-        screen="Notebooks"
-        loading={!isFocused}
-        placeholderData={PLACEHOLDER_DATA}
-        headerProps={{
-          heading: "Notebooks"
-        }}
-      />
+  useEffect(() => {
+    if (notebooks?.placeholders) {
+      if (notebooks?.placeholders?.length === 0 && !Config.isTesting) {
+        Walkthrough.present("notebooks");
+      } else {
+        Walkthrough.update("notebooks");
+      }
+    }
+  }, [notebooks]);
 
-      {!notebooks || notebooks.length === 0 || !isFocused ? null : (
-        <FloatingButton
-          title="Create a new notebook"
-          onPress={onPressFloatingButton}
+  return (
+    <>
+      <SelectionHeader
+        id={route.name}
+        items={notebooks}
+        renderedInRoute={route.name}
+        type="notebook"
+      />
+      <Header
+        renderedInRoute={route.name}
+        title={strings.routes[route.name]()}
+        canGoBack={route.params?.canGoBack}
+        hasSearch={true}
+        id={route.name}
+        onSearch={() => {
+          Navigation.push("Search", {
+            placeholder: strings.searchInRoute(route.name),
+            type: "notebook",
+            title: route.name,
+            route: route.name
+          });
+        }}
+        onPressDefaultRightButton={onButtonPress}
+      />
+      <DelayLayout wait={loading}>
+        <List
+          data={notebooks}
+          dataType="notebook"
+          renderedInRoute="Notebooks"
+          loading={loading}
+          placeholder={{
+            title: strings.yourNotebooks(),
+            paragraph: strings.notebooksEmpty(),
+            button: strings.addFirstNotebook(),
+            action: onButtonPress,
+            loading: strings.loadingNotebooks()
+          }}
+          headerTitle={strings.routes[route.name]()}
         />
-      )}
-    </DelayLayout>
+
+        {!notebooks ||
+        notebooks.placeholders.length === 0 ||
+        !isFocused ? null : (
+          <FloatingButton onPress={onButtonPress} />
+        )}
+      </DelayLayout>
+    </>
   );
 };
 

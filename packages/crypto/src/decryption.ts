@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,34 +17,21 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import {
-  crypto_aead_xchacha20poly1305_ietf_decrypt,
-  crypto_secretstream_xchacha20poly1305_init_pull,
-  crypto_secretstream_xchacha20poly1305_pull,
-  to_base64,
-  from_base64,
-  base64_variants,
-  StateAddress,
-  to_string,
-  from_hex
-} from "libsodium-wrappers";
-import KeyUtils from "./keyutils";
-import {
-  Cipher,
-  EncryptionKey,
-  OutputFormat,
-  Plaintext,
-  SerializedKey
-} from "./types";
+import { base64_variants, ISodium } from "@notesnook/sodium";
+import KeyUtils from "./keyutils.js";
+import { Cipher, Output, DataFormat, SerializedKey } from "./types.js";
 
 export default class Decryption {
-  private static transformInput(cipherData: Cipher): Uint8Array {
+  private static transformInput(
+    sodium: ISodium,
+    cipherData: Cipher<DataFormat>
+  ): Uint8Array {
     let input: Uint8Array | null = null;
     if (
       typeof cipherData.cipher === "string" &&
       cipherData.format === "base64"
     ) {
-      input = from_base64(
+      input = sodium.from_base64(
         cipherData.cipher,
         base64_variants.URLSAFE_NO_PADDING
       );
@@ -52,7 +39,7 @@ export default class Decryption {
       typeof cipherData.cipher === "string" &&
       cipherData.format === "hex"
     ) {
-      input = from_hex(cipherData.cipher);
+      input = sodium.from_hex(cipherData.cipher);
     } else if (cipherData.cipher instanceof Uint8Array) {
       input = cipherData.cipher;
     }
@@ -60,54 +47,54 @@ export default class Decryption {
     return input;
   }
 
-  static decrypt(
+  static decrypt<TOutputFormat extends DataFormat>(
+    sodium: ISodium,
     key: SerializedKey,
-    cipherData: Cipher,
-    outputFormat: OutputFormat = "text"
-  ): Plaintext {
+    cipherData: Cipher<DataFormat>,
+    outputFormat: TOutputFormat = "text" as TOutputFormat
+  ): Output<TOutputFormat> {
     if (!key.salt && cipherData.salt) key.salt = cipherData.salt;
-    const encryptionKey = KeyUtils.transform(key);
+    const encryptionKey = KeyUtils.transform(sodium, key);
 
-    const input = this.transformInput(cipherData);
-    const plaintext = crypto_aead_xchacha20poly1305_ietf_decrypt(
+    const input = this.transformInput(sodium, cipherData);
+    const plaintext = sodium.crypto_aead_xchacha20poly1305_ietf_decrypt(
       null,
       input,
       null,
-      from_base64(cipherData.iv),
+      sodium.from_base64(cipherData.iv),
       encryptionKey.key
     );
 
-    return {
-      format: outputFormat,
-      data:
-        outputFormat === "base64"
-          ? to_base64(plaintext, base64_variants.ORIGINAL)
-          : outputFormat === "text"
-          ? to_string(plaintext)
-          : plaintext
-    };
+    return (
+      outputFormat === "base64"
+        ? sodium.to_base64(plaintext, base64_variants.ORIGINAL)
+        : outputFormat === "text"
+        ? sodium.to_string(plaintext)
+        : plaintext
+    ) as Output<TOutputFormat>;
   }
 
-  static createStream(header: string, key: SerializedKey): DecryptionStream {
-    return new DecryptionStream(header, KeyUtils.transform(key));
-  }
-}
-
-class DecryptionStream {
-  state: StateAddress;
-  constructor(header: string, key: EncryptionKey) {
-    this.state = crypto_secretstream_xchacha20poly1305_init_pull(
-      from_base64(header),
-      key.key
+  static createStream(
+    sodium: ISodium,
+    header: string,
+    key: SerializedKey
+  ): TransformStream<Uint8Array, Uint8Array> {
+    const { key: _key } = KeyUtils.transform(sodium, key);
+    const state = sodium.crypto_secretstream_xchacha20poly1305_init_pull(
+      sodium.from_base64(header),
+      _key
     );
-  }
 
-  read(chunk: Uint8Array): Uint8Array {
-    const { message } = crypto_secretstream_xchacha20poly1305_pull(
-      this.state,
-      chunk,
-      null
-    );
-    return message;
+    return new TransformStream<Uint8Array, Uint8Array>({
+      start() {},
+      transform(chunk, controller) {
+        const { message, tag } =
+          sodium.crypto_secretstream_xchacha20poly1305_pull(state, chunk, null);
+        if (!message) throw new Error("Could not decrypt chunk.");
+        controller.enqueue(message);
+        if (tag === sodium.crypto_secretstream_xchacha20poly1305_TAG_FINAL)
+          controller.terminate();
+      }
+    });
   }
 }

@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -19,6 +19,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import { useEffect, useRef, useState } from "react";
 import { MMKV } from "../common/database/mmkv";
+import { strings } from "@notesnook/intl";
 
 declare global {
   interface Array<T> {
@@ -53,7 +54,7 @@ type Context =
   | "topics";
 
 export type TTip = {
-  text: string;
+  text: () => string;
   contexts: Context[];
   image?: string;
   button?: TipButton;
@@ -61,7 +62,7 @@ export type TTip = {
 
 export type Popup = {
   id: string;
-  text: string;
+  text: () => string;
 };
 
 const destructiveContexts = ["first-note"];
@@ -116,7 +117,7 @@ export class TipManager {
 export const useTip = (
   context: Context,
   fallback: Context,
-  options: {
+  options?: {
     rotate: boolean;
     delay: number;
   }
@@ -143,71 +144,9 @@ export const useTip = (
   return tip;
 };
 
-const tips: TTip[] = [
-  {
-    text: "You can swipe left anywhere in the app to start a new note",
-    contexts: ["notes", "first-note"]
-  },
-  {
-    text: "Long press on any item in list to open quick actions menu.",
-    contexts: ["notes", "notebook", "notebook", "tags", "topics"]
-  },
-  {
-    text: "Monographs enable you to share your notes in a secure and private way",
-    contexts: ["monographs"]
-  },
-  {
-    text: "Monographs can be encrypted with a secret key and shared with anyone",
-    contexts: ["monographs"]
-  },
-  {
-    text: "Frequently accessed notebooks can be pinned to Side Menu so that they are easily accessible",
-    contexts: ["notebook", "notebooks"]
-  },
-  {
-    text: "A notebook can have unlimited topics with unlimited notes.",
-    contexts: ["notebook", "topics"]
-  },
-  {
-    text: "You can multi-select notes and move them to a notebook at once",
-    contexts: ["notebook", "topics"]
-  },
-  {
-    text: "Items in trash are kept for 7 days after which they are permanently deleted.",
-    contexts: ["trash"]
-  },
-  {
-    text: "Mark important notes by adding them to favorites",
-    contexts: ["notes"]
-  },
-  {
-    text: "Have to scroll down a lot to open a note you are working on? Pin it to top from properties.",
-    contexts: ["notes"]
-  }
-];
+const tips: TTip[] = strings.tips as TTip[];
 
-const popups: Popup[] = [
-  {
-    id: "sortmenu",
-    text: "Tap here to change sorting"
-  },
-  {
-    id: "jumpto",
-    text: "Tap here to jump to a section"
-  },
-  {
-    id: "compactmode",
-    text: "Try compact mode to fit more items on screen"
-  },
-  {
-    id: "searchreplace",
-    text: "Switch to search/replace mode"
-  },
-  {
-    id: "notebookshortcut",
-    text: "Create shortcut of this notebook in side menu"
-  }
-];
+const popups: Popup[] = strings.popups;
 
 const placeholderTips = [
   "Want to remember something? Pin an important note in notifications.",
@@ -215,7 +154,7 @@ const placeholderTips = [
   "If you read someone else's diary, you get what you deserve. - David Sedaris",
   "Take quick notes from notifications. Enable the option in Settings to try",
   "Get Notesnook on all your devices. Or even open it in browser by going to https://app.notesnook.com to access all your notes",
-  "With note history, you can restore back to an older version of the note if you accidently deleted something.",
+  "With note history, you can restore back to an older version of the note if you accidentally deleted something.",
   "When your heart speaks, take good notes. - Judith Campbell",
   "You can publish a note and share it with anyone. Even if they don't use Notesnook!",
   "Published notes can be encrypted. Which means only you and the person you share the password with can read them.",

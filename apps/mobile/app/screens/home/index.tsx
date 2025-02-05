@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -18,48 +18,29 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 import React from "react";
-import { db } from "../../common/database";
 import { FloatingButton } from "../../components/container/floating-button";
 import DelayLayout from "../../components/delay-layout";
+import { Header } from "../../components/header";
 import List from "../../components/list";
+import SelectionHeader from "../../components/selection-header";
 import { useNavigationFocus } from "../../hooks/use-navigation-focus";
 import Navigation, { NavigationProps } from "../../services/navigation";
-import SearchService from "../../services/search";
 import SettingsService from "../../services/settings";
 import useNavigationStore from "../../stores/use-navigation-store";
-import { useNoteStore } from "../../stores/use-notes-store";
+import { useNotes } from "../../stores/use-notes-store";
 import { openEditor } from "../notes/common";
-const prepareSearch = () => {
-  SearchService.update({
-    placeholder: "Type a keyword to search in notes",
-    type: "notes",
-    title: "Notes",
-    get: () => db.notes?.all
-  });
-};
-
-const PLACEHOLDER_DATA = {
-  heading: "Notes",
-  paragraph: "You have not added any notes yet.",
-  button: "Add your first note",
-  action: openEditor,
-  loading: "Loading your notes"
-};
+import { strings } from "@notesnook/intl";
 
 export const Home = ({ navigation, route }: NavigationProps<"Notes">) => {
-  const notes = useNoteStore((state) => state.notes);
-  const loading = useNoteStore((state) => state.loading);
+  const [notes, loading] = useNotes();
+
   const isFocused = useNavigationFocus(navigation, {
     onFocus: (prev) => {
       Navigation.routeNeedsUpdate(
         route.name,
         Navigation.routeUpdateFunctions[route.name]
       );
-      useNavigationStore.getState().update({
-        name: route.name
-      });
-      SearchService.prepareSearch = prepareSearch;
-      useNavigationStore.getState().setButtonAction(openEditor);
+      useNavigationStore.getState().setFocusedRouteId(route.name);
       return !prev?.current;
     },
     onBlur: () => false,
@@ -67,20 +48,44 @@ export const Home = ({ navigation, route }: NavigationProps<"Notes">) => {
   });
 
   return (
-    <DelayLayout wait={loading} delay={500}>
-      <List
-        listData={notes}
-        type="notes"
-        screen="Notes"
-        loading={loading || !isFocused}
-        headerProps={{
-          heading: "Notes"
+    <>
+      <SelectionHeader id={route.name} items={notes} type="note" />
+      <Header
+        renderedInRoute={route.name}
+        title={strings.routes[route.name]()}
+        canGoBack={false}
+        hasSearch={true}
+        onSearch={() => {
+          Navigation.push("Search", {
+            placeholder: strings.searchInRoute(route.name),
+            type: "note",
+            title: route.name,
+            route: route.name
+          });
         }}
-        placeholderData={PLACEHOLDER_DATA}
+        id={route.name}
+        onPressDefaultRightButton={openEditor}
       />
-
-      <FloatingButton title="Create a new note" onPress={openEditor} />
-    </DelayLayout>
+      <DelayLayout wait={loading}>
+        <List
+          data={notes}
+          dataType="note"
+          renderedInRoute={route.name}
+          loading={loading || !isFocused}
+          headerTitle={strings.routes[route.name]()}
+          placeholder={{
+            title: route.name?.toLowerCase(),
+            paragraph: strings.notesEmpty(),
+            button: strings.createNewNote(),
+            action: openEditor,
+            loading: strings.loadingNotes()
+          }}
+        />
+        {!notes || !notes.placeholders?.length ? null : (
+          <FloatingButton onPress={openEditor} />
+        )}
+      </DelayLayout>
+    </>
   );
 };
 

@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,23 +17,21 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import {
-  crypto_generichash,
-  crypto_pwhash,
-  crypto_pwhash_ALG_ARGON2ID13,
-  crypto_pwhash_SALTBYTES
-} from "libsodium-wrappers";
+import { ISodium } from "@notesnook/sodium";
 
 export default class Password {
-  static hash(password: string, salt: string): string {
-    const saltBytes = crypto_generichash(crypto_pwhash_SALTBYTES, salt);
-    const hash = crypto_pwhash(
+  static hash(sodium: ISodium, password: string, salt: string): string {
+    const saltBytes = sodium.crypto_generichash(
+      sodium.crypto_pwhash_SALTBYTES,
+      salt
+    );
+    const hash = sodium.crypto_pwhash(
       32,
       password,
       saltBytes,
       3, // operations limit
       1024 * 1024 * 64, // memory limit (8MB)
-      crypto_pwhash_ALG_ARGON2ID13,
+      sodium.crypto_pwhash_ALG_ARGON2ID13,
       "base64"
     );
     return hash;

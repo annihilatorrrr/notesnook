@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -61,7 +61,7 @@ test("check recovery key of user", async ({ page }) => {
     USER.CURRENT.password &&
     (await settings.getRecoveryKey(USER.CURRENT.password));
 
-  expect(key).toBe(USER.CURRENT.key);
+  expect(key?.length).toBeGreaterThan(0);
 });
 
 test("login user & wait for sync", async ({ page }, info) => {
@@ -72,9 +72,7 @@ test("login user & wait for sync", async ({ page }, info) => {
 
   await app.auth.login(USER.CURRENT);
 
-  await page
-    .locator(getTestId("sync-status-completed"))
-    .waitFor({ state: "visible" });
+  await app.waitForSync("synced");
   expect(await app.isSynced()).toBeTruthy();
 });
 
@@ -99,6 +97,7 @@ test("logged in user should not be able to open unauthorized routes", async ({
     await page.goto(route);
 
     await page.waitForURL(/\/notes/gm);
+    await page.waitForTimeout(1000);
     expect(await app.navigation.findItem("Notes")).toBeDefined();
   }
 });

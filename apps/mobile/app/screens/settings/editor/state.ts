@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,13 +17,13 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import type { ToolbarGroupDefinition } from "@notesnook/editor/dist/toolbar/types";
+import { CURRENT_TOOLBAR_VERSION, migrateToolbar } from "@notesnook/common";
+import type { ToolbarGroupDefinition } from "@notesnook/editor";
 import create, { State } from "zustand";
-import { persist, StateStorage } from "zustand/middleware";
-import { useNoteStore } from "../../../stores/use-notes-store";
-import { useSettingStore } from "../../../stores/use-setting-store";
+import { StateStorage, persist } from "zustand/middleware";
 import { db } from "../../../common/database";
 import { MMKV } from "../../../common/database/mmkv";
+import { useSettingStore } from "../../../stores/use-setting-store";
 import { presets } from "./toolbar-definition";
 export type ToolDefinition = string | string[];
 
@@ -68,22 +68,25 @@ export const useDragState = create<DragState>(
       customPresetData: presets["custom"],
       setData: (data) => {
         const _data = clone(data);
+
         presets["custom"] = _data;
-        db.settings?.setToolbarConfig(
-          useSettingStore.getState().deviceMode || "mobile",
+        db.settings.setToolbarConfig(
+          useSettingStore.getState().deviceMode || ("mobile" as any),
           {
             preset: "custom",
-            config: clone(_data)
+            config: clone(_data),
+            version: CURRENT_TOOLBAR_VERSION
           }
         );
         set({ data: _data, preset: "custom", customPresetData: _data });
       },
       setPreset: (preset) => {
-        db.settings?.setToolbarConfig(
-          useSettingStore.getState().deviceMode || "mobile",
+        db.settings.setToolbarConfig(
+          useSettingStore.getState().deviceMode || ("mobile" as any),
           {
             preset,
-            config: preset === "custom" ? clone(get().customPresetData) : []
+            config: preset === "custom" ? clone(get().customPresetData) : [],
+            version: CURRENT_TOOLBAR_VERSION
           }
         );
         set({
@@ -97,44 +100,39 @@ export const useDragState = create<DragState>(
       init: async () => {
         const user = await db.user?.getUser();
         if (!user) return;
-        const toolbarConfig = db.settings?.getToolbarConfig(
-          useSettingStore.getState().deviceMode || "mobile"
+        let toolbarConfig = db.settings.getToolbarConfig(
+          useSettingStore.getState().deviceMode || ("mobile" as any)
         );
         if (!toolbarConfig) {
           logger.info("DragState", "No user defined toolbar config was found");
           return;
         }
-        const preset = toolbarConfig?.preset as DragState["preset"];
-        logger.info(
-          "DragState",
-          "Init user toolbar config",
-          preset,
-          toolbarConfig?.config
+
+        toolbarConfig = await migrateToolbar(
+          useSettingStore.getState().deviceMode || ("mobile" as any),
+          toolbarConfig
         );
+
+        const preset = toolbarConfig?.preset as DragState["preset"];
         set({
           preset: preset,
           data:
             preset === "custom"
-              ? clone(toolbarConfig?.config)
+              ? clone(toolbarConfig?.config as any[])
               : clone(presets[preset]),
           customPresetData:
             preset === "custom"
-              ? clone(toolbarConfig?.config)
+              ? clone(toolbarConfig?.config as any[])
               : clone(presets["custom"])
         });
       }
     }),
     {
       name: "drag-state-storage", // unique name
-      getStorage: () => MMKV as StateStorage,
+      getStorage: () => MMKV as unknown as StateStorage,
       onRehydrateStorage: () => {
         return () => {
-          logger.info(
-            "DragState",
-            "rehydrated drag state",
-            useNoteStore.getState().loading
-          );
-          if (!useNoteStore.getState().loading) {
+          if (!useSettingStore.getState().isAppLoading) {
             useDragState.getState().init();
           } else {
             setTimeout(() => {

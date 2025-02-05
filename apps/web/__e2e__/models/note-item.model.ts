@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -38,22 +38,33 @@ export class NoteItemModel extends BaseItemModel {
     this.editor = new EditorModel(this.page);
   }
 
-  async openNote() {
-    await this.click();
+  async openNote(openInNewTab?: boolean) {
+    await this.click({ middleClick: openInNewTab });
     const title = await this.getTitle();
-    const description = await this.getDescription();
-
-    await this.editor.waitForLoading(title, description);
+    await this.editor.waitForLoading(title);
   }
 
   async openLockedNote(password: string) {
     if (!(await this.contextMenu.isLocked())) return;
 
-    await this.page.locator(getTestId("unlock-note-password")).fill(password);
-    await this.page.locator(getTestId("unlock-note-submit")).click();
+    await this.page
+      .locator(".active")
+      .locator(getTestId("unlock-note-password"))
+      .fill(password);
+    await this.page
+      .locator(".active")
+      .locator(getTestId("unlock-note-submit"))
+      .click();
 
     const title = await this.getTitle();
     await this.editor.waitForLoading(title);
+  }
+
+  async isFavorite() {
+    await this.locator
+      .locator(getTestId("favorite"))
+      .waitFor({ state: "visible" });
+    return true;
   }
 
   async getTags() {

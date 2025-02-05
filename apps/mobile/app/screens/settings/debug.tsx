@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,43 +17,30 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+import { sanitizeFilename } from "@notesnook/common";
+import { format, LogLevel, logManager } from "@notesnook/core";
+import { strings } from "@notesnook/intl";
+import { LogMessage } from "@notesnook/logger";
+import { useThemeColors } from "@notesnook/theme";
 import Clipboard from "@react-native-clipboard/clipboard";
-import { LogMessage } from "@streetwriters/logger";
-import { format, LogLevel, logManager } from "@notesnook/core/logger";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { FlatList, Platform, TouchableOpacity, View } from "react-native";
+import RNFetchBlob from "react-native-blob-util";
 import * as ScopedStorage from "react-native-scoped-storage";
-import RNFetchBlob from "rn-fetch-blob";
-import Storage from "../../common/database/storage";
+import filesystem from "../../common/filesystem";
 import { presentDialog } from "../../components/dialog/functions";
 import { IconButton } from "../../components/ui/icon-button";
 import { Notice } from "../../components/ui/notice";
 import Paragraph from "../../components/ui/typography/paragraph";
 import useTimer from "../../hooks/use-timer";
-import { ToastEvent } from "../../services/event-manager";
-import { useThemeStore } from "../../stores/use-theme-store";
-import { hexToRGBA } from "../../utils/color-scheme/utils";
-import { sanitizeFilename } from "../../utils/sanitizer";
-// function getLevelString(level: number) {
-//   switch (level) {
-//     case LogLevel.Debug:
-//       return 'DEBUG';
-//     case LogLevel.Info:
-//       return 'INFO';
-//     case LogLevel.Log:
-//       return 'LOG';
-//     case LogLevel.Error:
-//       return 'ERROR';
-//     case LogLevel.Warn:
-//       return 'WARN';
-//     case LogLevel.Fatal:
-//       return 'FATAL';
-//   }
-// }
+import { ToastManager } from "../../services/event-manager";
+import { hexToRGBA } from "../../utils/colors";
 
 export default function DebugLogs() {
-  const colors = useThemeStore((state) => state.colors);
+  const { colors } = useThemeColors();
   const { seconds, start } = useTimer("debug_logs_timer");
+  const listRef = useRef<FlatList>(null);
+  const currentOffset = useRef(0);
   const [logs, setLogs] = useState<
     {
       key: string;
@@ -85,25 +72,25 @@ export default function DebugLogs() {
     ({ item }: { item: LogMessage; index: number }) => {
       const background =
         item.level === LogLevel.Error || item.level === LogLevel.Fatal
-          ? hexToRGBA(colors.red, 0.2)
+          ? hexToRGBA(colors.error.paragraph, 0.2)
           : item.level === LogLevel.Warn
-          ? hexToRGBA(colors.orange, 0.2)
+          ? hexToRGBA(colors.static.orange, 0.2)
           : "transparent";
 
       const color =
         item.level === LogLevel.Error || item.level === LogLevel.Fatal
-          ? colors.red
+          ? colors.error.paragraph
           : item.level === LogLevel.Warn
-          ? colors.orange
-          : colors.pri;
+          ? colors.static.black
+          : colors.primary.paragraph;
 
       return !item ? null : (
         <TouchableOpacity
           activeOpacity={1}
           onLongPress={() => {
             Clipboard.setString(format(item));
-            ToastEvent.show({
-              heading: "Debug log copied!",
+            ToastManager.show({
+              heading: strings.logsCopied(),
               context: "global",
               type: "success"
             });
@@ -114,7 +101,7 @@ export default function DebugLogs() {
             backgroundColor: background,
             flexShrink: 1,
             borderBottomWidth: 1,
-            borderBottomColor: colors.nav
+            borderBottomColor: colors.primary.border
           }}
         >
           <Paragraph
@@ -131,7 +118,14 @@ export default function DebugLogs() {
         </TouchableOpacity>
       );
     },
-    [colors.nav, colors.orange, colors.pri, colors.red]
+    [
+      colors.secondary.background,
+      colors.primary.paragraph,
+      colors.error.paragraph,
+      colors.static.black,
+      colors.static.orange,
+      colors.primary.border
+    ]
   );
 
   const downloadLogs = React.useCallback(async () => {
@@ -154,21 +148,19 @@ export default function DebugLogs() {
         if (!file) return;
         path = file.uri;
       } else {
-        path = await Storage.checkAndCreateDir("/");
+        path = await filesystem.checkAndCreateDir("/");
         await RNFetchBlob.fs.writeFile(path + fileName + ".txt", data, "utf8");
         path = path + fileName;
       }
 
       if (path) {
-        ToastEvent.show({
-          heading: "Debug logs downloaded",
+        ToastManager.show({
+          heading: strings.logsDownloaded(),
           context: "global",
           type: "success"
         });
       }
-    } catch (e) {
-      console.log(e);
-    }
+    } catch (e) {}
   }, [currentLog?.logs]);
 
   const copyLogs = React.useCallback(() => {
@@ -179,8 +171,8 @@ export default function DebugLogs() {
       .join("\n");
     if (!data) return;
     Clipboard.setString(data);
-    ToastEvent.show({
-      heading: "Debug log copied!",
+    ToastManager.show({
+      heading: strings.logsCopied(),
       context: "global",
       type: "success"
     });
@@ -189,10 +181,10 @@ export default function DebugLogs() {
   const clearLogs = React.useCallback(() => {
     if (!currentLog) return;
     presentDialog({
-      title: "Clear logs",
-      paragraph: `Are you sure you want to delete all logs from ${currentLog.key}?`,
-      negativeText: "Cancel",
-      positiveText: "Clear",
+      title: strings.clearLogs(),
+      paragraph: strings.clearLogsConfirmation(currentLog.key),
+      negativeText: strings.cancel(),
+      positiveText: strings.clear(),
       positivePress: () => {
         const index = logs.findIndex((l) => (l.key = currentLog.key));
         logManager?.delete(currentLog.key);
@@ -220,14 +212,12 @@ export default function DebugLogs() {
           padding: 12
         }}
       >
-        <Notice
-          text="All logs are local only and are not sent to any server. You can share the logs from here with us if you face an issue to help us find the root cause."
-          type="information"
-        />
+        <Notice text={strings.debugNotice()} type="information" />
       </View>
 
       {currentLog && (
         <FlatList
+          ref={listRef}
           ListHeaderComponent={
             <View
               style={{
@@ -235,7 +225,7 @@ export default function DebugLogs() {
                 marginBottom: 10,
                 flexDirection: "row",
                 alignItems: "center",
-                backgroundColor: colors.bg,
+                backgroundColor: colors.primary.background,
                 justifyContent: "space-between"
               }}
             >
@@ -248,7 +238,7 @@ export default function DebugLogs() {
                 <Paragraph>{currentLog.key}</Paragraph>
 
                 <IconButton
-                  customStyle={{
+                  style={{
                     width: 30,
                     height: 30,
                     marginHorizontal: 5
@@ -262,11 +252,11 @@ export default function DebugLogs() {
                   }}
                   size={20}
                   name="chevron-left"
-                  color={colors.icon}
+                  color={colors.primary.icon}
                 />
 
                 <IconButton
-                  customStyle={{
+                  style={{
                     width: 30,
                     height: 30
                   }}
@@ -279,7 +269,7 @@ export default function DebugLogs() {
                   }}
                   size={20}
                   name="chevron-right"
-                  color={colors.icon}
+                  color={colors.primary.icon}
                 />
               </View>
 
@@ -291,36 +281,36 @@ export default function DebugLogs() {
                 <IconButton
                   onPress={copyLogs}
                   size={20}
-                  customStyle={{
+                  style={{
                     width: 30,
                     height: 30,
                     marginRight: 5
                   }}
                   name="content-copy"
-                  color={colors.gray}
+                  color={colors.secondary.paragraph}
                 />
                 <IconButton
                   onPress={downloadLogs}
-                  customStyle={{
+                  style={{
                     width: 30,
                     height: 30,
                     marginRight: 5
                   }}
                   size={20}
                   name="download"
-                  color={colors.gray}
+                  color={colors.secondary.paragraph}
                 />
 
                 <IconButton
                   onPress={clearLogs}
-                  customStyle={{
+                  style={{
                     width: 30,
                     height: 30,
                     marginRight: 5
                   }}
                   size={20}
                   name="delete"
-                  color={colors.gray}
+                  color={colors.secondary.paragraph}
                 />
               </View>
             </View>

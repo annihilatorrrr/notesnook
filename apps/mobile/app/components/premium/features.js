@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -50,7 +50,6 @@ export const features = [
       }
     ]
   },
-
   {
     title: "No limit on notes or devices",
     detail:
@@ -90,6 +89,45 @@ export const features = [
     ]
   },
   {
+    title: "Cross platform Reminders",
+    detail: "Stay updated on all your upcoming tasks with reminders.",
+    features: [
+      {
+        highlight: "One-time",
+        content: "reminders",
+        icon: "bell"
+      },
+      {
+        highlight: "Daily, weekly & monthly",
+        content: "reminders",
+        icon: "refresh",
+        pro: true
+      }
+    ]
+  },
+  {
+    title: "Two-factor authentication",
+    detail:
+      "Improve account security & prevent intruders from accessing your notes",
+    info: "* 2FA via email is enabled by default for all users.",
+    features: [
+      {
+        highlight: "Email *",
+        icon: "bell"
+      },
+      {
+        highlight: "Authentication",
+        content: "app",
+        icon: "refresh"
+      },
+      {
+        highlight: "SMS",
+        icon: "refresh",
+        pro: true
+      }
+    ]
+  },
+  {
     title: "Keep secrets always locked with private vault",
     detail:
       "An extra layer of security for any important data. Notes in the vault always stay encrypted and require a password to be accessed or edited everytime.",
@@ -124,14 +162,31 @@ export const features = [
         platform: "android"
       }
     ],
-    info: "* Free users are limited to keeping 3 notebooks (no limit on topics) and 5 tags."
+    info: "* Free users are limited to keeping 3 notebooks and 5 tags."
   },
 
   {
-    title: "Instant syncing",
+    title: "Instant sync",
     detail:
-      "Seemlessly work from anywhere on any device. Every change is synced instantly to all your devices.",
-    pro: true
+      "Seamlessly work from anywhere on any device. Every change is synced instantly to all your devices.",
+    info: "* Disable sync completely, turn off auto sync or disable editor realtime sync.",
+    features: [
+      {
+        highlight: "Sync to unlimited",
+        content: "devices",
+        icon: "cellphone"
+      },
+      {
+        highlight: "Realtime",
+        content: "editor sync",
+        icon: "sync"
+      },
+      {
+        highlight: "Granular sync",
+        content: "controls *",
+        icon: "sync-off"
+      }
+    ]
   },
   {
     title: "Rich tools for rich editing",
@@ -139,7 +194,7 @@ export const features = [
       "Having the right tool at the right time is crucial for note taking. Lists, tables, codeblocks — you name it, we have it.",
     features: [
       {
-        highlight: "Basic formating",
+        highlight: "Basic formatting",
         content: "and lists",
         icon: "format-bold"
       },
@@ -153,6 +208,12 @@ export const features = [
         highlight: "Markdown",
         content: "support",
         icon: "language-markdown",
+        pro: true
+      },
+      {
+        highlight: "Personalized",
+        content: "editor toolbar",
+        icon: "gesture-tap-button",
         pro: true
       },
       {

@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,68 +17,79 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+import { useThemeColors } from "@notesnook/theme";
 import React from "react";
 import { Platform, View } from "react-native";
+import { ScrollView } from "react-native-actions-sheet";
 import { getVersion } from "react-native-device-info";
 import { features } from "../../../features";
 import { eSendEvent, presentSheet } from "../../../services/event-manager";
 import SettingsService from "../../../services/settings";
-import { useThemeStore } from "../../../stores/use-theme-store";
-import { eCloseProgressDialog } from "../../../utils/events";
+import { eCloseSheet } from "../../../utils/events";
 import { SIZE } from "../../../utils/size";
 import { Button } from "../../ui/button";
 import Seperator from "../../ui/seperator";
 import Heading from "../../ui/typography/heading";
 import Paragraph from "../../ui/typography/paragraph";
+import { strings } from "@notesnook/intl";
 export type FeatureType = {
   title: string;
   body: string;
   platform?: "ios" | "android";
 };
 
-const NewFeature = ({ features }: { features: FeatureType[] }) => {
-  const colors = useThemeStore((state) => state.colors);
+const NewFeature = ({
+  features,
+  version
+}: {
+  features: FeatureType[];
+  version?: string;
+}) => {
+  const { colors } = useThemeColors();
 
   return (
     <View
       style={{
         alignItems: "center",
         paddingHorizontal: 12,
-        paddingTop: 12
+        paddingTop: 12,
+        maxHeight: "100%"
       }}
     >
-      <Heading color={colors.icon} size={SIZE.md}>
-        New Version Highlights 🎉
+      <Heading color={colors.secondary.heading} size={SIZE.md}>
+        {strings.newVersionHighlights(version)}
       </Heading>
 
       <Seperator />
 
-      {features.map((item) => (
-        <View
-          key={item.title}
-          style={{
-            backgroundColor: colors.nav,
-            padding: 12,
-            borderRadius: 10,
-            width: "100%",
-            marginBottom: 10
-          }}
-        >
-          <Heading size={SIZE.lg - 2}>{item.title}</Heading>
-          <Paragraph>{item.body}</Paragraph>
-        </View>
-      ))}
+      <ScrollView>
+        {features.map((item) => (
+          <View
+            key={item.title}
+            style={{
+              backgroundColor: colors.secondary.background,
+              padding: 12,
+              borderRadius: 10,
+              width: "100%",
+              marginBottom: 10
+            }}
+          >
+            <Heading size={SIZE.lg - 2}>{item.title}</Heading>
+            <Paragraph selectable>{item.body}</Paragraph>
+          </View>
+        ))}
+      </ScrollView>
       <Seperator />
 
       <Button
-        title="Got it"
+        title={strings.gotIt()}
         type="accent"
         width={250}
         style={{
           borderRadius: 100
         }}
         onPress={() => {
-          eSendEvent(eCloseProgressDialog);
+          eSendEvent(eCloseSheet);
         }}
       />
     </View>
@@ -93,7 +104,13 @@ NewFeature.present = () => {
     });
     return;
   }
-  if (version && version === getVersion()) return false;
+  if (!version || version === getVersion()) {
+    SettingsService.set({
+      version: getVersion()
+    });
+    return false;
+  }
+
   SettingsService.set({
     version: getVersion()
   });
@@ -102,7 +119,13 @@ NewFeature.present = () => {
   );
   if (_features.length === 0) return;
   presentSheet({
-    component: <NewFeature features={features} />
+    component: (
+      <NewFeature
+        features={features}
+        version={SettingsService.getProperty("version") || undefined}
+      />
+    ),
+    disableClosing: true
   });
   return true;
 };

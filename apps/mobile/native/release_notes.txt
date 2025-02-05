@@ -1,5 +1,0 @@
-- Now you can disable double spaced lines in editor
-- Uploading full quality images is not supported.
-- Many bug fixes and performance improvements
-
-Thank you for using Notesnook!

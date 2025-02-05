@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,12 +17,21 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { ToolbarGroup } from "../../components/toolbar-group";
-import { HoverPopupProps } from ".";
+import { ToolbarGroup } from "../../components/toolbar-group.js";
+import { HoverPopupProps } from "./index.js";
+import { useHoverPopupContext } from "./context.js";
+import { ToolbarGroupDefinition } from "../../types.js";
 
+const LINK_TOOLS: ToolbarGroupDefinition = [
+  "openLink",
+  "editLink",
+  "removeLink",
+  "copyLink"
+];
 function LinkHoverPopup(props: HoverPopupProps) {
-  const { editor, selectedNode } = props;
-  const { node } = selectedNode;
+  const { editor } = props;
+  const { selectedNode } = useHoverPopupContext();
+  const { node } = selectedNode || {};
 
   if (
     !node?.isText ||
@@ -34,9 +43,9 @@ function LinkHoverPopup(props: HoverPopupProps) {
   return (
     <ToolbarGroup
       force
-      tools={["openLink", "editLink", "removeLink"]}
+      tools={LINK_TOOLS}
+      groupId={"linkHoverTools"}
       editor={editor}
-      selectedNode={selectedNode}
       sx={{
         bg: "background",
         boxShadow: "menu",

@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -21,82 +21,89 @@ import { Dimensions, PixelRatio, Platform } from "react-native";
 import DeviceInfo from "react-native-device-info";
 
 let windowSize = Dimensions.get("window");
-
+let screenSize = Dimensions.get("screen");
 export class DeviceDetectionService {
   constructor() {
     this.setNewValues();
   }
 
+  isTablet() {
+    return DeviceInfo.isTablet();
+  }
   setNewValues() {
+    screenSize = Dimensions.get("screen");
     windowSize = Dimensions.get("window");
     this.pixelDensity = PixelRatio.get();
     this.width = windowSize.width;
     this.height = windowSize.height;
     this.adjustedWidth = this.width * this.pixelDensity;
     this.adjustedHeight = this.height * this.pixelDensity;
+    this.screenWidth = screenSize.width;
+    this.screenHeight = screenSize.height;
     this.isPhoneOrTablet();
     this.isIosOrAndroid();
     this.detectIphoneX();
     this.checkSmallTab();
   }
 
-  setSize(size) {
-    windowSize = size;
+  setSize(size, orientation) {
+    windowSize = size || windowSize;
     this.width = windowSize.width;
     this.height = windowSize.height;
     this.adjustedWidth = this.width * this.pixelDensity;
     this.adjustedHeight = this.height * this.pixelDensity;
+    screenSize = Dimensions.get("screen");
+    this.screenWidth = screenSize.width;
+    this.screenHeight = screenSize.height;
     this.isPhoneOrTablet();
     this.isIosOrAndroid();
     this.detectIphoneX();
-    this.checkSmallTab(size.width > size.height ? "LANDSCAPE" : "PORTRAIT");
+    this.checkSmallTab(orientation);
   }
 
   getDeviceSize = () => {
-    let dpi = this.pixelDensity * 160;
-    let deviceWidthInInches = this.adjustedWidth / dpi;
-    let deviceHeightInInches = this.adjustedHeight / dpi;
-    let diagonalSize = Math.sqrt(
-      Math.pow(deviceWidthInInches, 2) + Math.pow(deviceHeightInInches, 2)
-    );
-    return Platform.isPad ? diagonalSize + 2 : diagonalSize;
+    let size = this.width / 100;
+    return size;
+  };
+
+  getScreenSize = () => {
+    let size = this.screenWidth / 100;
+    return size;
   };
 
   checkSmallTab(orientation) {
-    this.width = Dimensions.get("screen").width;
-    this.height = Dimensions.get("screen").height;
     let deviceSize = this.getDeviceSize();
 
+    const isLandscape = orientation?.startsWith("LANDSCAPE");
+    const isValidTabletSize = deviceSize > 5.5;
+    const isValidLargeTabletSize = deviceSize > 9;
+
     if (
-      (!DeviceInfo.isTablet() && orientation === "LANDSCAPE") ||
-      (DeviceInfo.isTablet() && (orientation === "PORTRAIT" || deviceSize < 9))
+      (!this.isTablet() && isLandscape && isValidTabletSize) ||
+      (this.isTablet() && isValidTabletSize && !isValidLargeTabletSize)
     ) {
       this.isTab = true;
       this.isPhone = false;
       this.isSmallTab = true;
-    } else if (
-      DeviceInfo.isTablet() &&
-      orientation === "LANDSCAPE" &&
-      deviceSize > 9
-    ) {
+    } else if (this.isTablet() && isLandscape && isValidLargeTabletSize) {
       this.isTab = true;
       this.isPhone = false;
       this.isSmallTab = false;
     } else {
-      if (!DeviceInfo.isTablet()) {
+      if (!this.isTablet() || deviceSize < 5.5) {
         this.isTab = false;
         this.isPhone = true;
         this.isSmallTab = false;
       } else {
         this.isTab = true;
-        this.isSmallTab = false;
-        this.isPhone = true;
+        this.isSmallTab = true;
+        this.isPhone = false;
       }
     }
   }
 
   isPhoneOrTablet() {
-    if (DeviceInfo.isTablet()) {
+    if (this.isTablet()) {
       this.isTab = true;
       this.isPhone = false;
     } else {

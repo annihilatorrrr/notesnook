@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -34,7 +34,6 @@ test("#1002 Can't add a tag that's a substring of an existing tag", async ({
   await notes.createNote(NOTE);
 
   await notes.editor.setTags(tags);
-  await page.waitForTimeout(200);
 
   const noteTags = await notes.editor.getTags();
   expect(noteTags).toHaveLength(tags.length);

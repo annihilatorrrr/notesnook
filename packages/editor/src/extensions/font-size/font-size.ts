@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,12 +17,11 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { Extension } from "@tiptap/core";
-import "@tiptap/extension-text-style";
+import { useToolbarStore } from "../../toolbar/stores/toolbar-store.js";
+import { Editor, Extension } from "@tiptap/core";
 
 type FontSizeOptions = {
   types: string[];
-  defaultFontSize: number;
 };
 
 declare module "@tiptap/core" {
@@ -44,8 +43,7 @@ export const FontSize = Extension.create<FontSizeOptions>({
   name: "fontSize",
 
   defaultOptions: {
-    types: ["textStyle"],
-    defaultFontSize: 16
+    types: ["textStyle"]
   },
 
   addGlobalAttributes() {
@@ -54,13 +52,11 @@ export const FontSize = Extension.create<FontSizeOptions>({
         types: this.options.types,
         attributes: {
           fontSize: {
-            default: `${this.options.defaultFontSize}px`,
             parseHTML: (element) => element.style.fontSize,
             renderHTML: (attributes) => {
               if (!attributes.fontSize) {
                 return {};
               }
-
               return {
                 style: `font-size: ${attributes.fontSize}`
               };
@@ -87,5 +83,33 @@ export const FontSize = Extension.create<FontSizeOptions>({
             .run();
         }
     };
+  },
+  addKeyboardShortcuts() {
+    return {
+      "ctrl-]": ({ editor }) => {
+        editor
+          .chain()
+          .focus()
+          .setFontSize(`${Math.min(120, getFontSize(editor) + 1)}px`)
+          .run();
+        return true;
+      },
+      "Ctrl-[": ({ editor }) => {
+        editor
+          .chain()
+          .focus()
+          .setFontSize(`${Math.max(8, getFontSize(editor) - 1)}px`)
+          .run();
+        return true;
+      }
+    };
   }
 });
+
+function getFontSize(editor: Editor) {
+  const defaultFontSize = useToolbarStore.getState().fontSize;
+  const { fontSize } = editor.getAttributes("textStyle");
+  return fontSize
+    ? parseInt(fontSize.replace("px", "")) || 16
+    : defaultFontSize;
+}

@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,15 +17,16 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+import { useThemeColors } from "@notesnook/theme";
 import React from "react";
-import { useNoteStore } from "../../stores/use-notes-store";
-import { useThemeStore } from "../../stores/use-theme-store";
 import { AnnouncementDialog } from "../announcements";
-import { AttachmentDialog } from "../attachments";
 import AuthModal from "../auth/auth-modal";
 import { SessionExpired } from "../auth/session-expired";
 import { Dialog } from "../dialog";
-import { AddTopicDialog } from "../dialogs/add-topic";
+import { AppLockPassword } from "../dialogs/applock-password";
+import JumpToSectionDialog from "../dialogs/jump-to-section";
+import { LoadingDialog } from "../dialogs/loading";
+import PDFPreview from "../dialogs/pdf-preview";
 import ResultDialog from "../dialogs/result";
 import { VaultDialog } from "../dialogs/vault";
 import ImagePreview from "../image-preview";
@@ -33,43 +34,34 @@ import MergeConflicts from "../merge-conflicts";
 import PremiumDialog from "../premium";
 import { Expiring } from "../premium/expiring";
 import SheetProvider from "../sheet-provider";
-import { AddNotebookSheet } from "../sheets/add-notebook";
-import AddToNotebookSheet from "../sheets/add-to";
-import ExportNotesSheet from "../sheets/export-notes";
-import ManageTagsSheet from "../sheets/manage-tags";
-import PublishNoteSheet from "../sheets/publish-note";
 import RateAppSheet from "../sheets/rate-app";
 import RecoveryKeySheet from "../sheets/recovery-key";
-import RestoreDataSheet from "../sheets/restore-data";
+import Progress from "../dialogs/progress";
 
 const DialogProvider = () => {
-  const colors = useThemeStore((state) => state.colors);
-  const loading = useNoteStore((state) => state.loading);
+  const { colors } = useThemeColors();
 
   return (
     <>
+      <AppLockPassword />
+      <LoadingDialog />
       <Dialog context="global" />
-      <AddTopicDialog colors={colors} />
-      <AddNotebookSheet colors={colors} />
       <PremiumDialog colors={colors} />
       <AuthModal colors={colors} />
       <MergeConflicts />
-      <ExportNotesSheet />
       <RecoveryKeySheet colors={colors} />
       <SheetProvider />
       <SheetProvider context="sync_progress" />
-      <RestoreDataSheet />
       <ResultDialog />
       <VaultDialog colors={colors} />
-      <AddToNotebookSheet colors={colors} />
       <RateAppSheet />
       <ImagePreview />
-      <PublishNoteSheet />
-      <ManageTagsSheet />
-      <AttachmentDialog />
-      {loading ? null : <Expiring />}
+      <Expiring />
       <AnnouncementDialog />
       <SessionExpired />
+      <PDFPreview />
+      <JumpToSectionDialog />
+      <Progress />
     </>
   );
 };

@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -23,10 +23,7 @@ import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { Dialog } from "../dialog";
 import { Issue } from "../sheets/github/issue";
 
-const error = (
-  stack: string,
-  component: string
-) => `Please let us know what happened. What steps we can take to reproduce the issue here.
+const error = (stack: string, component: string) => `
 
 _______________________________
 Stacktrace: In ${component}::${stack}`;
@@ -69,7 +66,7 @@ class ExceptionHandler extends React.Component<{
               this.props.component
             )}
             defaultTitle={this.state.error?.message}
-            issueTitle="An exception occured"
+            issueTitle="An exception occurred"
           />
           <Dialog />
         </SafeAreaView>
@@ -81,10 +78,10 @@ class ExceptionHandler extends React.Component<{
 }
 
 export const withErrorBoundry = (Element: React.ElementType, name: string) => {
-  return function ErrorBoundary() {
+  return function ErrorBoundary(props: any) {
     return (
       <ExceptionHandler component={name}>
-        <Element />
+        <Element {...props} />
       </ExceptionHandler>
     );
   };

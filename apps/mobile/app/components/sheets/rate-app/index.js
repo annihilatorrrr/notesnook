@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -33,6 +33,7 @@ import Seperator from "../../ui/seperator";
 import SheetWrapper from "../../ui/sheet";
 import Heading from "../../ui/typography/heading";
 import Paragraph from "../../ui/typography/paragraph";
+import { strings } from "@notesnook/intl";
 const RateAppSheet = () => {
   const [visible, setVisible] = useState(false);
   const actionSheetRef = useRef();
@@ -85,20 +86,16 @@ const RateAppSheet = () => {
           paddingHorizontal: 12
         }}
       >
-        <Heading>Do you enjoy using Notesnook?</Heading>
-        <Paragraph size={SIZE.md}>
-          It took us a year to bring Notesnook to life. Share your experience
-          and suggestions to help us improve it.
-        </Paragraph>
+        <Heading>{strings.rateAppHeading()}</Heading>
+        <Paragraph size={SIZE.md}>{strings.rateAppDesc()}</Paragraph>
 
         <Seperator half />
         <Button
           onPress={rateApp}
           fontSize={SIZE.md}
           width="100%"
-          height={50}
           type="accent"
-          title="Rate now (It takes only a second)"
+          title={strings.rateApp()}
         />
         <View
           style={{
@@ -121,16 +118,14 @@ const RateAppSheet = () => {
             fontSize={SIZE.md}
             type="error"
             width="48%"
-            height={50}
-            title="Never"
+            title={strings.never()}
           />
           <Button
             onPress={onClose}
             fontSize={SIZE.md}
             width="48%"
-            height={50}
-            type="grayBg"
-            title="Later"
+            type="secondary"
+            title={strings.later()}
           />
         </View>
       </View>

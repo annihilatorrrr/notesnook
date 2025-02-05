@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -44,9 +44,9 @@ import {
   deleteSelection
 } from "prosemirror-commands";
 
-import { collapseMathNode } from "./commands/collapse-math-node";
-import { IMathPluginState } from "./math-plugin";
-import { MathRenderFn } from "./renderers/types";
+import { collapseMathNode } from "./commands/collapse-math-node.js";
+import { IMathPluginState } from "./math-plugin.js";
+import { MathRenderFn } from "./renderers/types.js";
 
 type FragmentWithContent = Fragment & { content: ProseNode[] };
 

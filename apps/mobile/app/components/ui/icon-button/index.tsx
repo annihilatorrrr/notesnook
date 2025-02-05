@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,16 +17,15 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+import { useThemeColors } from "@notesnook/theme";
 import React from "react";
-import { ColorValue, GestureResponderEvent, ViewStyle } from "react-native";
-import Animated, { Layout } from "react-native-reanimated";
+import { ColorValue, GestureResponderEvent, TextStyle } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
-import { ColorKey, useThemeStore } from "../../../stores/use-theme-store";
-import { showTooltip, TOOLTIP_POSITIONS } from "../../../utils";
-import { hexToRGBA, RGB_Linear_Shade } from "../../../utils/color-scheme/utils";
+import { RGB_Linear_Shade, hexToRGBA } from "../../../utils/colors";
 import { SIZE } from "../../../utils/size";
-import { PressableButton, PressableButtonProps } from "../pressable";
-interface IconButtonProps extends PressableButtonProps {
+import NativeTooltip from "../../../utils/tooltip";
+import { Pressable, PressableProps } from "../pressable";
+interface IconButtonProps extends PressableProps {
   name: string;
   color?: ColorValue;
   size?: number;
@@ -37,15 +36,14 @@ interface IconButtonProps extends PressableButtonProps {
   disabled?: boolean;
   tooltipText?: string;
   tooltipPosition?: number;
-  iconStyle?: ViewStyle;
+  iconStyle?: TextStyle;
 }
 
-const AnimatedIcon = Animated.createAnimatedComponent(Icon);
 export const IconButton = ({
   onPress,
   name,
   color,
-  customStyle,
+  style,
   size = SIZE.xxl,
   iconStyle = {},
   left = 10,
@@ -54,12 +52,12 @@ export const IconButton = ({
   bottom = 10,
   onLongPress,
   tooltipText,
-  type = "gray",
+  type = "plain",
   fwdRef,
-  tooltipPosition = TOOLTIP_POSITIONS.TOP,
+  tooltipPosition = NativeTooltip.POSITIONS.TOP,
   ...restProps
 }: IconButtonProps) => {
-  const colors = useThemeStore((state) => state.colors);
+  const { colors } = useThemeColors();
 
   const _onLongPress = (event: GestureResponderEvent) => {
     if (onLongPress) {
@@ -67,38 +65,38 @@ export const IconButton = ({
       return;
     }
     if (tooltipText) {
-      showTooltip(event, tooltipText, tooltipPosition);
+      NativeTooltip.show(event, tooltipText, tooltipPosition);
     }
   };
 
   return (
-    <PressableButton
+    <Pressable
       {...restProps}
       fwdRef={fwdRef}
       onPress={onPress}
       hitSlop={{ top: top, left: left, right: right, bottom: bottom }}
       onLongPress={_onLongPress}
       type={type}
-      customStyle={{
+      style={{
         width: 40,
         height: 40,
         justifyContent: "center",
         alignItems: "center",
         borderRadius: 100,
-        ...customStyle
+        ...style
       }}
     >
-      <AnimatedIcon
-        layout={Layout}
+      <Icon
         name={name}
-        style={iconStyle}
+        style={iconStyle as any}
+        allowFontScaling
         color={
           restProps.disabled
-            ? RGB_Linear_Shade(-0.05, hexToRGBA(colors.nav))
-            : (colors[color as ColorKey] as ColorValue) || color
+            ? RGB_Linear_Shade(-0.05, hexToRGBA(colors.secondary.background))
+            : colors.static[color as never] || color
         }
         size={size}
       />
-    </PressableButton>
+    </Pressable>
   );
 };

@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -98,17 +98,20 @@ export const Paragraph = Node.create<ParagraphOptions>({
 
         const { state } = editor;
         const { selection } = state;
-        const { $from, empty } = selection;
+        const { $from, empty, $to } = selection;
+        const atEnd = $to.parentOffset === $to.parent.content.size;
 
-        if (!empty || $from.parent.type !== this.type || $from.depth > 1) {
+        if (
+          !empty ||
+          $from.parent.type !== this.type ||
+          $from.depth > 1 ||
+          atEnd
+        ) {
           return false;
         }
 
-        const endsWithNewline = $from.nodeBefore === null;
-
-        if (endsWithNewline) {
-          createParagraph(editor, this.type, true, false);
-          return true;
+        if (!atEnd) {
+          return createParagraph(editor, this.type, false, true);
         }
 
         return false;

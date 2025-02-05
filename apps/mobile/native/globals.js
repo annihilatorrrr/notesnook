@@ -1,69 +1,64 @@
 /* eslint-disable @typescript-eslint/no-var-requires */
-import { setJSExceptionHandler } from 'react-native-exception-handler';
+import "@azure/core-asynciterator-polyfill";
+import '@formatjs/intl-locale/polyfill'
+import '@formatjs/intl-pluralrules/polyfill'
 
+import '@formatjs/intl-pluralrules/locale-data/en'
+import '@formatjs/intl-pluralrules/locale-data/cs'
+import '@formatjs/intl-pluralrules/locale-data/fr'
+
+import 'react-native-url-polyfill/auto';
+import "./polyfills/console-time.js"
 global.Buffer = require('buffer').Buffer;
-//import { ScriptManager, Script } from '@callstack/repack/client';
 import '../app/common/logger/index';
 import { DOMParser } from './worker.js';
-
-// class DOM {
-//   static domparser;
-
-//   parseFromString(markupLanguage, mimeType, globals) {
-//     return DOM.domparser?.parseFromString(markupLanguage, mimeType, globals);
-//   }
-
-//   static async prepare() {
-//     if (!DOM.domparser) {
-//       let module = await import('./worker.js');
-//       DOM.domparser = new module.DOMParser();
-//     }
-//   }
-// }
 global.DOMParser = DOMParser;
+import {setI18nGlobal } from "@notesnook/intl";
+import { i18n } from "@lingui/core";
+import { ScriptManager, Script } from '@callstack/repack/client';
+import {
+  messages as $en
+} from "@notesnook/intl/dist/locales/$en.json";
+import {
+  messages as $pseudo
+} from "@notesnook/intl/dist/locales/$pseudo-LOCALE.json";
 
-//=================================================
-// ADVANCED use case:
-const exceptionhandler = (error, isFatal) => {
-  // TODO
-};
-setJSExceptionHandler(exceptionhandler, true);
+i18n.load({
+  en: __DEV__ ? $pseudo : $en
+});
+setI18nGlobal(i18n);
+i18n.activate("en");
+setI18nGlobal(i18n);
 
-// try {
-//   const shared = ScriptManager.shared;
-// } catch (e) {
-//   new ScriptManager({
-//     resolve: async (scriptId, caller) => {
-//       if (__DEV__) {
-//         return {
-//           url: Script.getDevServerURL(scriptId),
-//           cache: false
-//         };
-//       }
+if (global.__DEV__) {
+  const err = console.error;
+  console.error = function (message) {
+    if (typeof message === 'string' && message.includes('VirtualizedLists should never be')) {
+      err.apply(console, ["VirtualizedLists should never be nested inside plain ScrollViews"]);
+      return;
+    }
+    err.apply(console, arguments);
+  };
+}
 
-//       return {
-//         url: Script.getFileSystemURL(scriptId)
-//       };
-//     }
-//   });
-// }
-if (__DEV__) {
-  // ScriptManager.shared.on('resolving', (...args) => {
-  //   console.log('DEBUG/resolving', ...args);
-  // });
-  // ScriptManager.shared.on('resolved', (...args) => {
-  //   console.log('DEBUG/resolved', ...args);
-  // });
-  // ScriptManager.shared.on('prefetching', (...args) => {
-  //   console.log('DEBUG/prefetching', ...args);
-  // });
-  // ScriptManager.shared.on('loading', (...args) => {
-  //   console.log('DEBUG/loading', ...args);
-  // });
-  // ScriptManager.shared.on('loaded', (...args) => {
-  //   console.log('DEBUG/loaded', ...args);
-  // });
-  // ScriptManager.shared.on('error', (...args) => {
-  //   console.log('DEBUG/error', ...args);
-  // });
+
+try {
+  ScriptManager.shared.addResolver(async (scriptId) => {
+    // `scriptId` will be either 'student' or 'teacher'
+  
+    // In dev mode, resolve script location to dev server.
+    if (__DEV__) {
+      return {
+        url: Script.getDevServerURL(scriptId),
+        cache: false,
+      };
+    }
+  
+    return {
+      url: Script.getFileSystemURL(scriptId)
+    };
+  });
+  
+} catch(e) {
+  /** ignore error when running with metro bundler */
 }

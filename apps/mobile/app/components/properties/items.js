@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,49 +17,52 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+import { useThemeColors } from "@notesnook/theme";
 import React from "react";
-import { View } from "react-native";
-import { FlatList } from "react-native-gesture-handler";
+import { Dimensions, ScrollView, View } from "react-native";
 import Icon from "react-native-vector-icons/MaterialCommunityIcons";
-import { getRandomId } from "../../common/filesystem/utils";
 import { useActions } from "../../hooks/use-actions";
+import { useStoredRef } from "../../hooks/use-stored-ref";
 import { DDS } from "../../services/device-detection";
 import { useSettingStore } from "../../stores/use-setting-store";
-import { useThemeStore } from "../../stores/use-theme-store";
 import { SIZE } from "../../utils/size";
 import { Button } from "../ui/button";
-import { PressableButton } from "../ui/pressable";
+import { Pressable } from "../ui/pressable";
 import Paragraph from "../ui/typography/paragraph";
+
 export const Items = ({ item, buttons, close }) => {
-  const colors = useThemeStore((state) => state.colors);
+  const { colors } = useThemeColors();
+  const topBarSorting = useStoredRef("topbar-sorting-ref", {});
+
   const dimensions = useSettingStore((state) => state.dimensions);
   const actions = useActions({ item, close });
-  const data = actions.filter((i) => buttons.indexOf(i.name) > -1 && !i.hidden);
-
+  const data = actions.filter((i) => buttons.indexOf(i.id) > -1 && !i.hidden);
   let width = dimensions.width > 600 ? 600 : dimensions.width;
-  let columnItemsCount = DDS.isLargeTablet() ? 7 : 5;
+  const shouldShrink =
+    Dimensions.get("window").fontScale > 1 &&
+    Dimensions.get("window").width < 450;
+  let columnItemsCount = DDS.isLargeTablet() ? 7 : shouldShrink ? 4 : 5;
   let columnItemWidth = DDS.isTab
-    ? (width - 24) / columnItemsCount
-    : (width - 24) / columnItemsCount;
+    ? (width - 12) / columnItemsCount
+    : (width - 12) / columnItemsCount;
 
   const _renderRowItem = ({ item }) => (
     <View
-      onPress={item.func}
-      key={item.name}
-      testID={"icon-" + item.name}
+      key={item.id}
+      testID={"icon-" + item.id}
       style={{
         alignItems: "center",
         width: columnItemWidth,
         marginBottom: 10
       }}
     >
-      <PressableButton
+      <Pressable
         onPress={item.func}
-        type={item.on ? "shade" : "grayBg"}
-        customStyle={{
+        type={item.on ? "shade" : "secondary"}
+        style={{
           height: columnItemWidth - 12,
           width: columnItemWidth - 12,
-          borderRadius: 5,
+          borderRadius: 10,
           justifyContent: "center",
           alignItems: "center",
           textAlign: "center",
@@ -68,37 +71,43 @@ export const Items = ({ item, buttons, close }) => {
         }}
       >
         <Icon
+          allowFontScaling
           name={item.icon}
-          size={DDS.isTab ? SIZE.xxl : SIZE.lg}
+          size={DDS.isTab ? SIZE.xxl : shouldShrink ? SIZE.xxl : SIZE.lg}
           color={
             item.on
-              ? colors.accent
-              : item.name === "Delete" || item.name === "PermDelete"
-              ? colors.errorText
-              : colors.icon
+              ? colors.primary.accent
+              : item.id.match(/(delete|trash)/g)
+              ? colors.error.icon
+              : colors.secondary.icon
           }
         />
-      </PressableButton>
+      </Pressable>
 
-      <Paragraph size={SIZE.xs + 1} style={{ textAlign: "center" }}>
+      <Paragraph
+        size={SIZE.xs}
+        textBreakStrategy="simple"
+        style={{ textAlign: "center" }}
+      >
         {item.title}
       </Paragraph>
     </View>
   );
 
-  const renderColumnItem = ({ item }) => (
+  const renderColumnItem = (item) => (
     <Button
+      key={item.name + item.title}
       buttonType={{
         text: item.on
-          ? colors.accent
+          ? colors.primary.accent
           : item.name === "Delete" || item.name === "PermDelete"
-          ? colors.errorText
-          : colors.pri
+          ? colors.error.paragraph
+          : colors.primary.paragraph
       }}
       onPress={item.func}
       title={item.title}
       icon={item.icon}
-      type={item.on ? "shade" : "gray"}
+      type={item.on ? "shade" : "plain"}
       fontSize={SIZE.sm}
       style={{
         borderRadius: 0,
@@ -109,31 +118,149 @@ export const Items = ({ item, buttons, close }) => {
     />
   );
 
+  const renderTopBarItem = (item, index) => {
+    return (
+      <Pressable
+        onPress={() => {
+          item.func();
+          setImmediate(() => {
+            const currentValue = topBarSorting.current[item.id] || 0;
+            topBarSorting.current = {
+              ...topBarSorting.current,
+              [item.id]: currentValue + 1
+            };
+          });
+        }}
+        key={item.id}
+        testID={"icon-" + item.id}
+        activeOpacity={1}
+        style={{
+          alignSelf: "flex-start",
+          paddingHorizontal: 0,
+          flex: 1
+        }}
+      >
+        <View
+          onPress={item.func}
+          style={{
+            height: topBarItemWidth,
+            justifyContent: "center",
+            alignItems: "center",
+            textAlign: "center",
+            textAlignVertical: "center",
+            marginBottom: DDS.isTab ? 7 : 3.5,
+            borderRadius: 100
+          }}
+        >
+          <Icon
+            name={item.icon}
+            allowFontScaling
+            size={DDS.isTab ? SIZE.xxl : SIZE.md + 4}
+            color={
+              item.on
+                ? colors.primary.accent
+                : item.name === "Delete" || item.name === "PermDelete"
+                ? colors.error.icon
+                : colors.secondary.icon
+            }
+          />
+        </View>
+
+        <Paragraph
+          textBreakStrategy="simple"
+          size={SIZE.xxs}
+          style={{ textAlign: "center" }}
+        >
+          {item.title}
+        </Paragraph>
+      </Pressable>
+    );
+  };
+
+  const topBarItemsList = [
+    "pin",
+    "favorite",
+    "copy",
+    "share",
+    "lock-unlock",
+    "publish",
+    "export",
+    "copy-link",
+    "duplicate",
+    "local-only",
+    "read-only"
+  ];
+
+  const bottomBarItemsList = [
+    "notebooks",
+    "add-reminder",
+    "pin-to-notifications",
+    "history",
+    "reminders",
+    "attachments",
+    "references",
+    "trash"
+  ];
+
+  const topBarItems = data
+    .filter((item) => topBarItemsList.indexOf(item.id) > -1)
+    .sort((a, b) =>
+      topBarItemsList.indexOf(a.id) > topBarItemsList.indexOf(b.id) ? 1 : -1
+    )
+    .sort((a, b) => {
+      return (
+        (topBarSorting.current[b.id] || 0) - (topBarSorting.current[a.id] || 0)
+      );
+    });
+
+  const bottomGridItems = data
+    .filter((item) => bottomBarItemsList.indexOf(item.id) > -1)
+    .sort((a, b) =>
+      bottomBarItemsList.indexOf(a.id) > bottomBarItemsList.indexOf(b.id)
+        ? 1
+        : -1
+    );
+
+  let topBarItemWidth =
+    (width - (topBarItems.length * 10 + 14)) / topBarItems.length;
+  topBarItemWidth;
+
+  if (topBarItemWidth < 60) {
+    topBarItemWidth = 60;
+  }
+
   return item.type === "note" ? (
-    <FlatList
-      data={data}
-      key={`note_prop_list_${buttons.length}`}
-      keyExtractor={(item) => item.title}
-      numColumns={buttons.length < 5 ? buttons.length : columnItemsCount}
-      style={{
-        marginTop: item.type !== "note" ? 10 : 0,
-        paddingTop: 10
-      }}
-      columnWrapperStyle={{
-        justifyContent: "flex-start"
-      }}
-      contentContainerStyle={{
-        alignSelf: "center",
-        width: buttons.length < 5 ? "100%" : null,
-        paddingLeft: buttons.length < 5 ? 10 : 0
-      }}
-      renderItem={_renderRowItem}
-    />
+    <>
+      <ScrollView
+        horizontal
+        style={{
+          paddingHorizontal: 12,
+          marginTop: 6,
+          marginBottom: 6
+        }}
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{
+          paddingRight: 25,
+          gap: 15
+        }}
+      >
+        {topBarItems.map(renderTopBarItem)}
+      </ScrollView>
+
+      <View
+        style={{
+          flexDirection: "row",
+          flexWrap: "wrap",
+          alignContent: "flex-start",
+          marginTop: item.type !== "note" ? 10 : 0,
+          paddingTop: 10,
+          marginLeft: 6
+        }}
+      >
+        {bottomGridItems.map((item) => _renderRowItem({ item }))}
+      </View>
+    </>
   ) : (
-    <FlatList
-      data={data}
-      keyExtractor={(item) => item.title}
-      renderItem={renderColumnItem}
-    />
+    <View data={data}>{data.map(renderColumnItem)}</View>
   );
 };

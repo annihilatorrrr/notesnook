@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,7 +17,9 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import { Attachment } from "./picker";
+import { Attachment } from "@notesnook/editor";
+
+export const MAX_AUTO_SAVEABLE_WORDS = IS_TESTING ? 100 : 100_000;
 
 export type NoteStatistics = {
   words: {
@@ -27,14 +29,16 @@ export type NoteStatistics = {
 };
 
 export interface IEditor {
-  focus: () => void;
+  focus: (options?: {
+    position?: "start" | "end" | { from: number; to: number };
+    scrollIntoView?: boolean;
+  }) => void;
   undo: () => void;
   redo: () => void;
+  updateContent: (content: string) => void;
   attachFile: (file: Attachment) => void;
-  loadImage: (hash: string, src: string) => void;
-  sendAttachmentProgress: (
-    hash: string,
-    type: "download" | "upload" | "encrypt",
-    progress: number
-  ) => void;
+  sendAttachmentProgress: (hash: string, progress: number) => void;
+  startSearch: () => void;
+  getContent: () => string;
+  getSelection: () => { from: number; to: number };
 }

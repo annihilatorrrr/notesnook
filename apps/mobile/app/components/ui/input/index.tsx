@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -35,11 +35,14 @@ import {
   validatePass,
   validateUsername
 } from "../../../services/validation";
-import { useThemeStore } from "../../../stores/use-theme-store";
-import { getElevation } from "../../../utils";
+import { useThemeColors } from "@notesnook/theme";
+import { getElevationStyle } from "../../../utils/elevation";
 import { SIZE } from "../../../utils/size";
 import { IconButton } from "../icon-button";
 import Paragraph from "../typography/paragraph";
+import phone from "phone";
+import isURL from "validator/lib/isURL";
+
 interface InputProps extends TextInputProps {
   fwdRef?: RefObject<TextInput>;
   validationType?:
@@ -47,7 +50,8 @@ interface InputProps extends TextInputProps {
     | "email"
     | "confirmPassword"
     | "username"
-    | "phonenumber";
+    | "phonenumber"
+    | "url";
   loading?: boolean;
   onSubmit?: (
     event: NativeSyntheticEvent<TextInputSubmitEditingEventData>
@@ -62,10 +66,10 @@ interface InputProps extends TextInputProps {
     color: ColorValue;
     onPress: () => void;
     testID?: string;
+    size?: number;
   };
   buttons?: React.ReactNode;
   onBlurInput?: () => void;
-  onPress?: () => void;
   height?: number;
   fontSize?: number;
   onFocusInput?: () => void;
@@ -73,6 +77,8 @@ interface InputProps extends TextInputProps {
   buttonLeft?: React.ReactNode;
   inputStyle?: TextInputProps["style"];
   containerStyle?: ViewStyle;
+  wrapperStyle?: ViewStyle;
+  flexGrow?: number;
 }
 
 const Input = ({
@@ -90,30 +96,32 @@ const Input = ({
   button,
   onBlurInput,
   onPress,
-  height = 50,
+  height = 45,
   fontSize = SIZE.md,
   onFocusInput,
   buttons,
   marginRight,
   buttonLeft,
+  flexGrow = 1,
   inputStyle = {},
   containerStyle = {},
+  wrapperStyle = {},
   ...restProps
 }: InputProps) => {
-  const colors = useThemeStore((state) => state.colors);
+  const { colors, isDark } = useThemeColors();
   const [error, setError] = useState(false);
   const [focus, setFocus] = useState(false);
   const [secureEntry, setSecureEntry] = useState(true);
   const [showError, setShowError] = useState(false);
   const [errorList, setErrorList] = useState({
-    SHORT_PASS: true
+    SHORT_PASS: false
   });
   type ErrorKey = keyof typeof errorList;
   const color = error
-    ? colors.red
+    ? colors.error.paragraph
     : focus
-    ? customColor || colors.accent
-    : colors.nav;
+    ? customColor || colors.primary.accent
+    : colors.primary.border;
 
   const validate = async (value: string) => {
     if (!validationType) return;
@@ -144,8 +152,10 @@ const Input = ({
       case "confirmPassword":
         isError = customValidator && value === customValidator();
         break;
+      case "url":
+        isError = isURL(value);
+        break;
       case "phonenumber": {
-        const { default: phone } = await import("phone");
         const result = phone(value, {
           strictDetection: true,
           validateMobilePrefix: true
@@ -182,6 +192,12 @@ const Input = ({
     onChangeText && onChangeText(value);
     setShowError(false);
     validate(value);
+    if (value === "") {
+      setError(false);
+      setErrorList({
+        SHORT_PASS: false
+      });
+    }
   };
 
   const onBlur = () => {
@@ -215,7 +231,8 @@ const Input = ({
   const textStyle: TextInputProps["style"] = {
     paddingHorizontal: 0,
     fontSize: fontSize,
-    color: onPress && loading ? colors.accent : colors.pri,
+    color:
+      onPress && loading ? colors.primary.accent : colors.primary.paragraph,
     paddingVertical: 0,
     paddingBottom: 2.5,
     flexGrow: 1,
@@ -232,9 +249,10 @@ const Input = ({
         style={{
           height: height,
           marginBottom: marginBottom,
-          flexGrow: 1,
+          flexGrow: flexGrow,
           maxHeight: height,
-          marginRight: marginRight
+          marginRight: marginRight,
+          ...wrapperStyle
         }}
       >
         <TouchableOpacity
@@ -248,7 +266,7 @@ const Input = ({
           <TextInput
             {...restProps}
             ref={fwdRef}
-            editable={!loading}
+            editable={!loading && restProps.editable}
             onChangeText={onChange}
             onBlur={onBlur}
             keyboardType={
@@ -258,12 +276,12 @@ const Input = ({
             }
             importantForAutofill="yes"
             importantForAccessibility="yes"
-            keyboardAppearance={colors.night ? "dark" : "light"}
+            keyboardAppearance={isDark ? "dark" : "light"}
             onFocus={onFocus}
             onSubmitEditing={onSubmit}
             style={textStyle}
             secureTextEntry={secureTextEntry && secureEntry}
-            placeholderTextColor={colors.placeholder}
+            placeholderTextColor={colors.primary.placeholder}
           />
 
           <View
@@ -288,7 +306,9 @@ const Input = ({
                   width: 25,
                   marginLeft: 5
                 }}
-                color={secureEntry ? colors.icon : colors.accent}
+                color={
+                  secureEntry ? colors.primary.icon : colors.primary.accent
+                }
               />
             )}
 
@@ -319,7 +339,7 @@ const Input = ({
                   width: 25,
                   marginLeft: 5
                 }}
-                color={colors.errorText}
+                color={colors.error.icon}
               />
             )}
           </View>
@@ -328,11 +348,11 @@ const Input = ({
             <View
               style={{
                 position: "absolute",
-                backgroundColor: colors.nav,
+                backgroundColor: colors.secondary.background,
                 paddingVertical: 3,
                 paddingHorizontal: 5,
                 borderRadius: 2.5,
-                ...getElevation(2),
+                ...getElevationStyle(2),
                 top: 0
               }}
             >
@@ -346,7 +366,7 @@ const Input = ({
                 <Icon
                   name="alert-circle-outline"
                   size={SIZE.xs}
-                  color={colors.errorText}
+                  color={colors.error.icon}
                 />{" "}
                 {errorMessage}
               </Paragraph>

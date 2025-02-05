@@ -1,7 +1,7 @@
 /*
 This file is part of the Notesnook project (https://notesnook.com/)
 
-Copyright (C) 2022 Streetwriters (Private) Limited
+Copyright (C) 2023 Streetwriters (Private) Limited
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
@@ -17,9 +17,9 @@ You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-import React, { PropsWithChildren, useRef } from "react";
-import { Box } from "@theme-ui/components";
-import { Scrollbars } from "rc-scrollbars";
+import React, { PropsWithChildren, useLayoutEffect } from "react";
+import { MacScrollbar, MacScrollbarProps } from "mac-scrollbar";
+import "mac-scrollbar/dist/mac-scrollbar.css";
 
 type ScrollContainerProps = {
   style?: React.CSSProperties;
@@ -28,117 +28,53 @@ type ScrollContainerProps = {
 
 const ScrollContainer = ({
   children,
-  style,
   forwardedRef,
   ...props
 }: PropsWithChildren<ScrollContainerProps>) => {
-  const ref = useRef<Scrollbars>();
-
   return (
-    <Scrollbars
+    <MacScrollbar
       {...props}
-      autoHide
-      ref={(sRef) => {
-        if (!sRef) return;
-        forwardedRef && forwardedRef((sRef.view as HTMLDivElement) || null);
-        ref.current = sRef;
+      ref={(div) => {
+        forwardedRef && forwardedRef(div as HTMLDivElement);
       }}
-      style={{ ...style, overflowY: "hidden" }}
-      renderView={({ style, ...props }) => (
-        <Box
-          {...props}
-          style={{ ...style, inset: "-1px" }}
-          onMouseEnter={() => {
-            if (
-              !ref.current ||
-              !ref.current.thumbVertical ||
-              !ref.current.thumbHorizontal
-            )
-              return;
-            const {
-              thumbHorizontal,
-              thumbVertical,
-              getThumbHorizontalWidth,
-              getThumbVerticalHeight
-            } = ref.current;
-
-            const height = `${getThumbVerticalHeight()}px`;
-            const width = `${getThumbHorizontalWidth()}px`;
-            if (height !== thumbVertical.style.height)
-              thumbVertical.style.height = height;
-            else if (thumbHorizontal.style.width !== width)
-              thumbHorizontal.style.width = width;
-          }}
-        />
-      )}
-      renderThumbVertical={({ style, ...props }) => (
-        <Box
-          {...props}
-          style={{
-            ...style,
-            backgroundColor: "var(--bgSecondaryText)"
-          }}
-        />
-      )}
+      style={{
+        position: "relative",
+        height: "100%"
+      }}
+      suppressScrollX
+      minThumbSize={40}
     >
       {children}
-    </Scrollbars>
+    </MacScrollbar>
   );
 };
 export default ScrollContainer;
 
 type FlexScrollContainerProps = {
+  id?: string;
   className?: string;
   style?: React.CSSProperties;
-  viewStyle?: React.CSSProperties;
-};
+  scrollRef?: React.Ref<HTMLElement>;
+} & MacScrollbarProps;
 
 export function FlexScrollContainer({
+  id,
   children,
-  className,
   style,
-  viewStyle
+  className,
+  scrollRef,
+  ...restProps
 }: PropsWithChildren<FlexScrollContainerProps>) {
   return (
-    <Scrollbars
-      autoHide
-      style={{
-        overflowY: "hidden",
-        height: "auto",
-        width: "auto",
-        display: "flex",
-        flexDirection: "column",
-        flex: "1 1 auto",
-        ...style
-      }}
-      renderView={({ style: _style, ...props }) => (
-        <Box
-          {...props}
-          className={className}
-          style={{
-            overflow: "scroll",
-            position: "relative",
-            flex: "1 1 auto",
-            ...viewStyle
-          }}
-          sx={{
-            scrollbarWidth: "none",
-            "::-webkit-scrollbar": { width: 0, height: 0 },
-            msOverflowStyle: "none"
-          }}
-        />
-      )}
-      renderThumbVertical={({ style, ...props }) => (
-        <Box
-          {...props}
-          style={{
-            ...style,
-            backgroundColor: "var(--bgSecondaryText)"
-          }}
-        />
-      )}
+    <MacScrollbar
+      {...restProps}
+      ref={scrollRef}
+      id={id}
+      className={className}
+      style={style}
+      minThumbSize={40}
     >
       {children}
-    </Scrollbars>
+    </MacScrollbar>
   );
 }
