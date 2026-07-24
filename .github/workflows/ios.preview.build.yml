@@ -110,10 +110,12 @@ jobs:
           cd apps/mobile/ios/build-configs
           ./use-ios-build-config.sh staging --marketing-version ${{steps.marketing-version.outputs.version}} --build-number ${{steps.build-number.outputs.timestamp}}
 
-      # Archive WITHOUT signing. No certificates or secrets are present in this
-      # job. The trusted publish workflow re-signs and exports this archive;
-      # `-exportArchive` only packages/signs and does NOT re-run the app's build
-      # phases, so fork code never runs alongside secrets.
+      # Archive unsigned: this job has no certs/profiles (secrets), and the iOS
+      # device SDK forbids ad-hoc signing, so real signing happens in the trusted
+      # publish workflow (ios.preview.publish.yml). Do NOT pass
+      # CODE_SIGN_ENTITLEMENTS="" -- each target must keep its own entitlements so
+      # the archive records them; blanking them dropped the App Group and crashed
+      # MMKV on launch.
       - name: Archive (unsigned)
         run: |
           set -euo pipefail
@@ -127,7 +129,6 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
-            CODE_SIGN_ENTITLEMENTS="" \
             archive
 
       - name: Stage build artifact
